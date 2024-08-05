@@ -11,7 +11,6 @@ import (
 	"github.com/goodieshq/sweettooth/pkg/crypto"
 	"github.com/goodieshq/sweettooth/pkg/crypto/dpapi"
 	"github.com/goodieshq/sweettooth/pkg/schedule"
-	"github.com/goodieshq/sweettooth/pkg/system"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -21,16 +20,6 @@ const DRIFT_TOLERANCE = 60 * time.Second
 func main() {
 	// Initialize the logger for human-friendly output
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	var info *system.OSInfo
-
-	data, err := json.MarshalIndent(info, "", "    ")
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-
-	fmt.Println(string(data))
-
-	return
 
 	// Bootstrap the scheduler (reset to an empty schedule and let the server provide the schedules)
 	if err := schedule.Bootstrap(); err != nil {
@@ -61,10 +50,30 @@ func main() {
 	}
 	log.Info().Msg("Bootstrapped cryptosystem")
 
-	if err := choco.Bootstrap(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to bootstrap chocolatey")
+	/*
+		if err := choco.Bootstrap(); err != nil {
+			log.Fatal().Err(err).Msg("Failed to bootstrap chocolatey")
+		}
+		log.Info().Msg("Bootstrapped chocolatey")
+	*/
+
+	fmt.Println(crypto.CreateNodeJWT())
+
+	a, b, err := choco.ListAllInstalled()
+	if err != nil {
+		log.Fatal().Err(err).Send()
 	}
-	log.Info().Msg("Bootstrapped chocolatey")
+
+	fmt.Println("A:", len(a))
+	fmt.Println(func() string { x, _ := json.MarshalIndent(a, "", "    "); return string(x) }())
+
+	fmt.Println()
+
+	fmt.Println("B:", len(b))
+	fmt.Println(func() string { x, _ := json.MarshalIndent(b, "", "    "); return string(x) }())
+
+	// fmt.Println(a)
+	// fmt.Println(b)
 
 	return
 
