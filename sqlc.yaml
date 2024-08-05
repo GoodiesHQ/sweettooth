@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - schema: "sql/schema.sql"
+    queries: "sql/queries"
+    engine: "postgresql"
+    gen:
+      go:
+        out: "pkg/database"
+        sql_package: "pgx/v5"
+        overrides:
+        - db_type: "boolean"
+          go_type: "bool"
