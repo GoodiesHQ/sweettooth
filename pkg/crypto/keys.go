@@ -11,6 +11,7 @@ import (
 // store the keys used throughout the application's lifespan
 var nodePublicKey ed25519.PublicKey
 var nodeSecretKey ed25519.PrivateKey
+var nodePublicKeyID string
 
 func SetKeyPair(publicKey ed25519.PublicKey, secretKey ed25519.PrivateKey) error {
 	// perform a test to ensure the keys are valid
@@ -21,7 +22,8 @@ func SetKeyPair(publicKey ed25519.PublicKey, secretKey ed25519.PrivateKey) error
 		// keys are valid, store application-wide keys
 		nodePublicKey = publicKey
 		nodeSecretKey = secretKey
-		log.Debug().Msg("Loaded keys in memory")
+		nodePublicKeyID = Fingerprint(publicKey).String()
+		log.Debug().Msgf("Loaded keys for ID %s - %s", nodePublicKeyID, base64.StdEncoding.EncodeToString(nodePublicKey))
 		return nil
 	}
 	return fmt.Errorf("public and Private key mismatch")
@@ -29,6 +31,10 @@ func SetKeyPair(publicKey ed25519.PublicKey, secretKey ed25519.PrivateKey) error
 
 func GetPublicKey() ed25519.PublicKey {
 	return nodePublicKey
+}
+
+func GetPublicKeyID() string {
+	return nodePublicKeyID
 }
 
 func GetPublicKeyBase64() string {

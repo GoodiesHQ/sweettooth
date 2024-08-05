@@ -11,20 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getEndpointSchedules = `-- name: GetEndpointSchedules :many
-WITH endpoint_schedules AS (
+const getNodeSchedules = `-- name: GetNodeSchedules :many
+WITH node_schedules AS (
     SELECT 
-        es.schedule_id,
+        ns.schedule_id,
         s.name,
         s.days,
         s.start_time,
         s.finish_time
     FROM 
-        endpoint_schedule_assignments es
+        node_schedule_assignments ns
     JOIN 
-        schedules s ON es.schedule_id = s.id
+        schedules s ON ns.schedule_id = s.id
     WHERE 
-        es.endpoint_id = $1
+        ns.node_id = $1
 ), group_schedules AS (
     SELECT 
         gs.schedule_id,
@@ -33,34 +33,26 @@ WITH endpoint_schedules AS (
         s.start_time,
         s.finish_time
     FROM 
-        endpoint_group_assignments ega
+        node_group_assignments nga
     JOIN 
-        group_schedule_assignments gs ON ega.group_id = gs.group_id
+        group_schedule_assignments gs ON nga.group_id = gs.group_id
     JOIN 
         schedules s ON gs.schedule_id = s.id
     WHERE 
-        ega.endpoint_id = $1
+        nga.node_id = $1
 )
 SELECT DISTINCT
-    schedule_id,
-    name,
-    days,
-    start_time,
-    finish_time
+    schedule_id, name, days, start_time, finish_time
 FROM 
-    endpoint_schedules
+    node_schedules
 UNION
 SELECT DISTINCT
-    schedule_id,
-    name,
-    days,
-    start_time,
-    finish_time
+    schedule_id, name, days, start_time, finish_time
 FROM 
     group_schedules
 `
 
-type GetEndpointSchedulesRow struct {
+type GetNodeSchedulesRow struct {
 	ScheduleID int32
 	Name       string
 	Days       string
@@ -68,16 +60,16 @@ type GetEndpointSchedulesRow struct {
 	FinishTime pgtype.Time
 }
 
-// Get a list of all schedules that apply to an endpoint
-func (q *Queries) GetEndpointSchedules(ctx context.Context, endpointID pgtype.UUID) ([]GetEndpointSchedulesRow, error) {
-	rows, err := q.db.Query(ctx, getEndpointSchedules, endpointID)
+// Get a list of all schedules that apply to an node
+func (q *Queries) GetNodeSchedules(ctx context.Context, nodeID pgtype.UUID) ([]GetNodeSchedulesRow, error) {
+	rows, err := q.db.Query(ctx, getNodeSchedules, nodeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetEndpointSchedulesRow
+	var items []GetNodeSchedulesRow
 	for rows.Next() {
-		var i GetEndpointSchedulesRow
+		var i GetNodeSchedulesRow
 		if err := rows.Scan(
 			&i.ScheduleID,
 			&i.Name,

@@ -3,14 +3,12 @@ package client
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/goodieshq/sweettooth/crypto"
-	"github.com/goodieshq/sweettooth/system"
+	"github.com/goodieshq/sweettooth/pkg/api"
+	"github.com/goodieshq/sweettooth/pkg/crypto"
+	"github.com/goodieshq/sweettooth/pkg/system"
 )
 
 type SweetToothClient struct {
@@ -24,7 +22,17 @@ func NewSweetToothClient(serverUrl string) (*SweetToothClient, error) {
 	return &cli, nil
 }
 
-func (client *SweetToothClient) doRequest(method, path string, body []byte) (*http.Response, error) {
+func (client *SweetToothClient) doRequest(method, path string, data interface{}) (*http.Response, error) {
+	// convert the data to JSON
+	var body []byte = nil
+	if data != nil {
+		var err error
+		body, err = json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// build the request with the base URL and the provided path
 	url := client.ServerURL + path
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
@@ -32,60 +40,50 @@ func (client *SweetToothClient) doRequest(method, path string, body []byte) (*ht
 		return nil, err
 	}
 
-	// Create the signature for the body and the current timestamp in RFC3339 format
-	now := time.Now()
-	timestamp := now.Format(time.RFC3339)
-	sigReq := crypto.SignBase64(append(body, []byte(";"+timestamp)...))
+	// create a JWT signed by the node's private key
+	sig, err := crypto.CreateNodeJWT()
+	if err != nil {
+		return nil, err
+	}
 
 	// Set the custom headers for the signature and the public key
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Signature", sigReq)
-	req.Header.Set("X-Timestamp", timestamp)
-	req.Header.Set("X-PublicKey", crypto.GetPublicKeyBase64())
+	req.Header.Set("Authorization", "Bearer "+sig)
 
 	// craft the web client and perform the request
 	web := &http.Client{}
-	res, err := web.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	// read body into a buffer
-	bodyRes, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// retreive the server's response signature
-	sigRes := res.Header.Get("X-Signature")
-	if sigRes == "" {
-		return nil, errors.New("missing signature in response")
-	}
-
-	// verify that the response is signed
-	b, err := crypto.VerifyServerBase64(bodyRes, sigRes)
-	if err != nil {
-		return nil, err
-	}
-	if !b {
-		return nil, errors.New("server key failed to verify")
-	}
-
-	return res, nil
+	return web.Do(req)
 }
 
-func (api *SweetToothClient) CheckIn(withInfo bool) (*http.Response, error) {
-	var body []byte = nil
+func (client *SweetToothClient) CheckIn(withInfo bool) (*http.Response, error) {
+	var info any = nil
 	if withInfo {
-		info, err := system.GetSystemInfo()
-		if err != nil {
-			return nil, err
-		}
-		body, err = json.Marshal(info)
+		var err error
+		info, err = system.GetSystemInfo()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return api.doRequest(http.MethodPost, "/checkin", body)
+	return client.doRequest(http.MethodPost, "/api/v1/node/checkin", info)
+}
+
+func (client *SweetToothClient) Register(organization_id *string) (*http.Response, error) {
+	var registration api.RegistrationRequest
+
+	info, err := system.GetSystemInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	registration.Hostname = info.Hostname
+	registration.ID = crypto.Fingerprint(crypto.GetPublicKey())
+	registration.PublicKey = crypto.GetPublicKeyBase64()
+	registration.Label = nil
+	registration.OSKernel = info.OSInfo.Kernel
+	registration.OSName = info.OSInfo.Name
+	registration.OSMajor = info.OSInfo.Major
+	registration.OSMinor = info.OSInfo.Minor
+	registration.OSBuild = info.OSInfo.Build
+
+	return client.doRequest(http.MethodPost, "/api/v1/node/register", registration)
 }

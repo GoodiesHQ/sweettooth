@@ -1,42 +1,48 @@
 package crypto
 
 import (
-	"crypto/ed25519"
-	"encoding/base64"
+	//"crypto/ed25519"
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/goodieshq/sweettooth/pkg/config"
 )
 
-// Use ed25519 signature algorithm to sign the payload
-func Sign(message []byte) []byte {
-	return ed25519.Sign(GetSecretKey(), message)
+const TOKEN_DRIFT_TOLERANCE = 5 * time.Minute
+const TOKEN_VALIDITY_PERIOD = 30 * time.Minute
+
+type TokenGenerator func() string
+
+// Create a JWT signed by the node's own key
+func CreateNodeJWT() (string, error) {
+	now := time.Now().UTC()
+	token := jwt.NewWithClaims(&jwt.SigningMethodEd25519{}, jwt.MapClaims{
+		// issuer and subject are both the current node, audience is the sweettooth application server
+		"iss":    GetPublicKeyID(),
+		"sub":    GetPublicKeyID(),
+		"pubkey": GetPublicKeyBase64(),
+		"iat":    now.Unix(),
+		"nbf":    now.Add(-TOKEN_DRIFT_TOLERANCE).Unix(),
+		"exp":    now.Add(TOKEN_VALIDITY_PERIOD).Add(TOKEN_DRIFT_TOLERANCE).Unix(),
+		"aud":    config.APP_NAME,
+	})
+	return token.SignedString(GetSecretKey())
 }
 
-func SignBase64(message []byte) string {
-	return base64.StdEncoding.EncodeToString(message)
-}
-
-// Verification that the message is signed by the client
-func VerifyClient(message []byte, signature []byte) bool {
-	return ed25519.Verify(GetPublicKey(), message, signature)
-}
-
-func VerifyClientBase64(message []byte, signature string) (bool, error) {
-	sig, err := base64.StdEncoding.DecodeString(signature)
+func VerifyNodeJWT(token string) error {
+	tok, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodEd25519); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return 1, nil
+	})
 	if err != nil {
-		return false, err
+		return err
 	}
-	return VerifyClient(message, sig), nil
-}
 
-// Verification that the message is signed by the server
-func VerifyServer(message []byte, signature []byte) bool {
-	// TODO: get server public key instead of our own
-	return ed25519.Verify(GetPublicKey(), message, signature)
-}
-
-func VerifyServerBase64(message []byte, signature string) (bool, error) {
-	sig, err := base64.StdEncoding.DecodeString(signature)
-	if err != nil {
-		return false, err
+	if tok == nil {
+		return nil
 	}
-	return VerifyServer(message, sig), nil
+	return nil
 }

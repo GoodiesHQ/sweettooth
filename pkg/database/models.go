@@ -8,29 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Endpoint struct {
-	ID             pgtype.UUID
-	OrganizationID pgtype.UUID
-	SystemName     string
-	PublicKey      string
-	ConnectedOn    pgtype.Timestamp
-	ApprovedOn     pgtype.Timestamp
-	LastSeen       pgtype.Timestamp
-	Enabled        bool
-}
-
-type EndpointGroupAssignment struct {
-	EndpointID     pgtype.UUID
-	GroupID        pgtype.UUID
-	OrganizationID pgtype.UUID
-}
-
-type EndpointScheduleAssignment struct {
-	EndpointID     pgtype.UUID
-	ScheduleID     int32
-	OrganizationID pgtype.UUID
-}
-
 type Group struct {
 	ID             pgtype.UUID
 	OrganizationID pgtype.UUID
@@ -43,22 +20,60 @@ type GroupScheduleAssignment struct {
 	OrganizationID pgtype.UUID
 }
 
-type Job struct {
-	ID             int64
-	EndpointID     pgtype.UUID
+type Node struct {
+	ID              pgtype.UUID
+	OrganizationID  pgtype.UUID
+	PublicKey       string
+	Label           pgtype.Text
+	Hostname        string
+	ClientVersion   string
+	PendingSources  bool
+	PendingSchedule bool
+	OsKernel        string
+	OsName          string
+	OsMajor         int32
+	OsMinor         int32
+	OsBuild         int32
+	ConnectedOn     pgtype.Timestamp
+	ApprovedOn      pgtype.Timestamp
+	LastSeen        pgtype.Timestamp
+	Approved        bool
+}
+
+type NodeGroupAssignment struct {
+	NodeID         pgtype.UUID
 	GroupID        pgtype.UUID
 	OrganizationID pgtype.UUID
-	Type           int32
-	Params         []byte
-	Created        pgtype.Timestamp
-	Completed      pgtype.Timestamp
-	Status         pgtype.Int4
-	Output         pgtype.Text
+}
+
+type NodeScheduleAssignment struct {
+	NodeID         pgtype.UUID
+	ScheduleID     int32
+	OrganizationID pgtype.UUID
 }
 
 type Organization struct {
 	ID   pgtype.UUID
 	Name string
+}
+
+type PackageJob struct {
+	ID               int64
+	NodeID           pgtype.UUID
+	GroupID          pgtype.UUID
+	OrganizationID   pgtype.UUID
+	Action           int32
+	Name             string
+	Version          pgtype.Text
+	IgnoreChecksum   bool
+	InstallOnUpgrade bool
+	Force            bool
+	VerboseOutput    bool
+	NotSilent        bool
+	CreatedAt        pgtype.Timestamp
+	CompletedAt      pgtype.Timestamp
+	Status           pgtype.Int4
+	Output           pgtype.Text
 }
 
 type Schedule struct {
@@ -68,4 +83,13 @@ type Schedule struct {
 	Days           string
 	StartTime      pgtype.Time
 	FinishTime     pgtype.Time
+}
+
+type ScheduleJob struct {
+	ID             int64
+	NodeID         pgtype.UUID
+	GroupID        pgtype.UUID
+	OrganizationID pgtype.UUID
+	CreatedAt      pgtype.Timestamp
+	CompletedAt    pgtype.Timestamp
 }

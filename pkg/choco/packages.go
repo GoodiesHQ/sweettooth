@@ -1,6 +1,7 @@
 package choco
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -46,6 +47,67 @@ func pkgactionName(action PkgAction) string {
 	default:
 		return ""
 	}
+}
+
+func ListAllInstalled() ([]util.Software, []util.Software, error) {
+	cmd := exec.Command("choco", "list", "--include-programs")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// split the output into two sections, one managed by chocolatey and the other not
+	parts := strings.Split(strings.ReplaceAll(string(output), "\r\n", "\n"), "\n\n")
+	if len(parts) < 2 {
+		return nil, nil, fmt.Errorf("unexpected output '%s'", string(output))
+	}
+
+	// parts[0] contains a space-delimited CSV of "name version"
+	var packageLinesChoco []string
+
+	for _, line := range strings.Split(strings.TrimSpace(parts[0]), "\n") {
+		packageLinesChoco = append(packageLinesChoco, strings.TrimSpace(line))
+	}
+	if len(packageLinesChoco) > 2 &&
+		strings.HasPrefix(packageLinesChoco[0], "Chocolatey") &&
+		strings.HasSuffix(packageLinesChoco[len(packageLinesChoco)-1], " packages installed.") {
+		packageLinesChoco = packageLinesChoco[1 : len(packageLinesChoco)-1] // remove the first and last line
+	} else {
+		log.Warn().Str("output", string(output)).Msg("No choco packages or output is bad")
+		packageLinesChoco = []string{}
+	}
+
+	var packageLinesSystem []string
+
+	// parts[1] contains a pipe-delimited CSV of "name|version"
+	for _, line := range strings.Split(strings.TrimSpace(parts[1]), "\n") {
+		packageLinesSystem = append(packageLinesSystem, strings.TrimSpace(line))
+	}
+	if len(packageLinesSystem) > 1 &&
+		strings.HasSuffix(packageLinesSystem[len(packageLinesSystem)-1], " applications not managed with Chocolatey.") {
+		log.Info().Msg("YES!")
+		packageLinesSystem = packageLinesSystem[:len(packageLinesSystem)-1] // remove the first and last line
+	} else {
+		log.Warn().Str("output", string(output)).Msg("No system packages or output is bad")
+		packageLinesSystem = []string{}
+	}
+
+	// convert an arbitrarily delimited lines into util.Software name/version
+	process := func(lines []string, delim string) []util.Software {
+		var software []util.Software
+		for _, line := range lines {
+			parts := strings.Split(line, delim)
+			if len(parts) != 2 { // line is unexpected
+				log.Warn().Str("line", line).Msg("invalid line")
+				continue
+			}
+			software = append(software, util.Software{Name: parts[0], Version: parts[1]})
+		}
+		return software
+	}
+
+	// return the processed output
+	return process(packageLinesChoco, " "), process(packageLinesSystem, "|"), nil
 }
 
 func ListChocoInstalled() ([]util.Software, error) {

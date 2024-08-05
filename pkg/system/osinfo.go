@@ -1,6 +1,7 @@
 package system
 
 import (
+	"os"
 	"strconv"
 	"strings"
 
@@ -17,8 +18,20 @@ type OSInfo struct {
 	Build    int
 }
 
-func GetSystemInfo() (*OSInfo, error) {
-	var info OSInfo
+type SystemInfo struct {
+	Hostname string
+	OSInfo   OSInfo
+}
+
+func GetSystemInfo() (*SystemInfo, error) {
+	var sysinfo SystemInfo
+	var osinfo *OSInfo = &sysinfo.OSInfo
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	sysinfo.Hostname = hostname
 
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
 	if err != nil {
@@ -30,25 +43,25 @@ func GetSystemInfo() (*OSInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	info.Kernel = currentVersion
+	osinfo.Kernel = currentVersion
 
 	productName, _, err := key.GetStringValue("ProductName")
 	if err != nil {
 		return nil, err
 	}
-	info.Name = productName
+	osinfo.Name = productName
 
 	major, _, err := key.GetIntegerValue("CurrentMajorVersionNumber")
 	if err != nil {
 		return nil, err
 	}
-	info.Major = int(major)
+	osinfo.Major = int(major)
 
 	minor, _, err := key.GetIntegerValue("CurrentMinorVersionNumber")
 	if err != nil {
 		return nil, err
 	}
-	info.Minor = int(minor)
+	osinfo.Minor = int(minor)
 
 	build, _, err := key.GetStringValue("CurrentBuild")
 	if err != nil {
@@ -58,14 +71,14 @@ func GetSystemInfo() (*OSInfo, error) {
 	if err != nil {
 		buildNumber = 0
 	}
-	info.Build = buildNumber
+	osinfo.Build = buildNumber
 
 	if major == 10 && buildNumber >= 22000 {
-		info.Name = strings.Replace(info.Name, "indows 10", "indows 11", -1)
+		osinfo.Name = strings.Replace(osinfo.Name, "indows 10", "indows 11", -1)
 	}
 
-	info.IsServer = strings.Contains(strings.ToLower(info.Name), "server")
-	log.Info().Str("osname", info.Name).Msg("Got System Info")
+	osinfo.IsServer = strings.Contains(strings.ToLower(osinfo.Name), "server")
+	log.Info().Str("osname", osinfo.Name).Msg("Got System Info")
 
-	return &info, nil
+	return &sysinfo, nil
 }

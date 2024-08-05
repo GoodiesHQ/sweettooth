@@ -1,7 +1,7 @@
 package system
 
 import (
-	"github.com/goodieshq/sweettooth/util"
+	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/windows/registry"
 )
