@@ -21,6 +21,9 @@ func CreateErr(status int, defaultMessage string) func(http.ResponseWriter, *htt
 
 var ErrNodeTokenInvalid = CreateErr(http.StatusUnauthorized, "the token is invalid or exired")
 var ErrNodeUnauthorized = CreateErr(http.StatusUnauthorized, "the token is not authorized")
-var ErrNodeNotApproved = CreateErr(http.StatusUnauthorized, "the node is not approved")
+var ErrNodeNotApproved = CreateErr(http.StatusForbidden, "the node is not approved")
 var ErrNodeNotFound = CreateErr(http.StatusNotFound, "the node ID is not found")
-var ErrInvalidRequestBody = CreateErr(http.StatusBadRequest, "invalid request body")
+var ErrOrgNotFound = CreateErr(http.StatusNotFound, "the organization is not found")
+var ErrInvalidRequestBody = CreateErr(http.StatusBadRequest, "invalid request payload")
+var ErrServiceUnavailable = CreateErr(http.StatusServiceUnavailable, "service unavailable")
+var ErrServerError = CreateErr(http.StatusInternalServerError, "internal server error")

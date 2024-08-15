@@ -1,15 +1,11 @@
 package server
 
 import (
-	"crypto/ed25519"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/goodieshq/sweettooth/pkg/config"
 	"github.com/goodieshq/sweettooth/pkg/crypto"
 	"github.com/goodieshq/sweettooth/pkg/util"
 )
@@ -49,7 +45,7 @@ func extractClaim[T any](claims jwt.MapClaims, name string) (T, error) {
 	return val, nil
 }
 
-// Middleware for handling endpoints which are exclusively used by nodes to interact with
+// Middleware for handling endpoints which are exclusively used by nodes running sweettooth clients
 func (srv *SweetToothServer) MiddlewareNodeAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// extract the bearer token from the Authorization header
@@ -59,83 +55,22 @@ func (srv *SweetToothServer) MiddlewareNodeAuth(next http.Handler) http.Handler 
 			return
 		}
 
-		// parse the token without verification to extract the public key
-		token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+		nodeid, _, err := crypto.VerifyNodeJWT(tokenString)
+		nodeidString := nodeid.String()
+		if nodeidString != "" {
+			// set the node ID (may be returned even upon error)
+			util.SetRequestNodeID(r, nodeid)
+		}
 		if err != nil {
 			ErrNodeTokenInvalid(w, r, err)
-			return
-		}
-
-		// extract the claims
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			ErrNodeTokenInvalid(w, r, err)
-			return
-		}
-
-		// there should be a pubkey within the claims
-		pubkeyB64, err := extractClaim[string](claims, "pubkey")
-		if err != nil {
-			ErrNodeTokenInvalid(w, r, err)
-			return
-		}
-
-		pubkeyBytes, err := base64.StdEncoding.DecodeString(pubkeyB64)
-		if err != nil {
-			ErrNodeTokenInvalid(w, r, err)
-			return
-		}
-
-		pubkey := ed25519.PublicKey(pubkeyBytes)
-		fprint := crypto.Fingerprint(pubkey)
-		fprints := fprint.String()
-		util.SetRequestNodeID(r, fprints)
-
-		token, err = jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-			}
-
-			// extract the necessary claims
-			sub, err := extractClaim[string](claims, "sub")
-			if err != nil {
-				return nil, err
-			}
-
-			iss, err := extractClaim[string](claims, "iss")
-			if err != nil {
-				return nil, err
-			}
-
-			aud, err := extractClaim[string](claims, "aud")
-			if err != nil {
-				return nil, err
-			}
-
-			// for node tokens, the iss and sub should both be the UUID
-			if sub != iss || aud != config.APP_NAME {
-				return nil, errors.New("unexpected sub/iss/aud values")
-			}
-
-			// and that UUID should be the fingerprint derived from pubkey
-			if fprints != sub {
-				return nil, errors.New("fingerprint mismatch")
-			}
-
-			return pubkey, nil
-		})
-
-		if err != nil || !token.Valid {
-			ErrNodeTokenInvalid(w, r, err)
-			return
 		}
 
 		/* At this point, all we know is that the signature is valid and well-formed. Check cache/db for validity */
-		_, found := srv.cacheValidNodeIDs.Get(fprints)
+		_, found := srv.cacheValidNodeIDs.Get(nodeidString)
 		if !found {
-			node, err := srv.core.GetNodeByID(fprint)
+			node, err := srv.core.GetNode(r.Context(), nodeid)
 			if err != nil {
-				ErrNodeTokenInvalid(w, r, err)
+				ErrServiceUnavailable(w, r, err)
 				return
 			}
 
@@ -150,8 +85,13 @@ func (srv *SweetToothServer) MiddlewareNodeAuth(next http.Handler) http.Handler 
 			}
 		}
 
-		srv.cacheValidNodeIDs.Set(fprints, true, 0)
+		// at this point, we know fprint is valid. Put it in the cache
+		srv.cacheValidNodeIDs.Set(nodeidString, true, 0)
 
+		if err := srv.core.Seen(r.Context(), nodeid); err != nil {
+			ErrServiceUnavailable(w, r, err)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }

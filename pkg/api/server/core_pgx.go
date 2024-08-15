@@ -3,28 +3,41 @@ package server
 import (
 	"context"
 	"fmt"
+	"math/rand"
 
+	"github.com/goodieshq/sweettooth/pkg/api"
+	"github.com/goodieshq/sweettooth/pkg/crypto"
 	"github.com/goodieshq/sweettooth/pkg/database"
+	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 )
 
+// PGX (postgres) implementation of SweetTooth Core
 type CorePGX struct {
-	pool *pgxpool.Pool
+	pool *pgxpool.Pool     // connection pool
+	q    *database.Queries // sqlc query functions
 }
 
-func pgxNodeToCoreNode(dbnode *database.Node) *Node {
-	var node Node
+// convert a pgx org to api org
+func pgxOrgToCoreOrg(dborg *database.Organization) *api.Organization {
+	var org api.Organization
+	org.ID = dborg.ID
+	org.Name = dborg.Name
+	return &org
+}
 
-	node.ID = uuid.UUID(dbnode.ID.Bytes)
+// convert a pgx node to api node
+func pgxNodeToCoreNode(dbnode *database.Node) *api.Node {
+	var node api.Node
+
+	node.ID = dbnode.ID
 
 	if dbnode.OrganizationID.Valid {
-		oid := new(uuid.UUID)
-		copy(oid[:], dbnode.OrganizationID.Bytes[:])
-		node.OrganizationID = oid
+		oid := uuid.UUID(dbnode.OrganizationID.Bytes)
+		node.OrganizationID = &oid
 	}
 
 	node.PublicKey = dbnode.PublicKey
@@ -62,9 +75,32 @@ func (core *CorePGX) Close() {
 	core.pool.Close()
 }
 
-func (core *CorePGX) GetNodeByID(id uuid.UUID) (*Node, error) {
-	q := database.New(core.pool)
-	node, err := q.GetNodeByID(context.Background(), pgtype.UUID{Bytes: id, Valid: true})
+func (core *CorePGX) Seen(ctx context.Context, id uuid.UUID) error {
+	return core.q.CheckInNode(ctx, id)
+}
+
+func (core *CorePGX) GetOrganization(ctx context.Context, id uuid.UUID) (*api.Organization, error) {
+	org, err := core.q.GetOrganizationByID(ctx, id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return pgxOrgToCoreOrg(&org), nil
+}
+
+func (core *CorePGX) UpdateNodePackages(ctx context.Context, nodeid uuid.UUID, packages *api.Packages) error {
+	return core.q.UpdateNodePackages(ctx, database.UpdateNodePackagesParams{
+		ID:               nodeid,
+		PackagesChoco:    packages.PackagesChoco,
+		PackagesSystem:   packages.PackagesSystem,
+		PackagesOutdated: packages.PackagesOutdated,
+	})
+}
+
+func (core *CorePGX) GetNode(ctx context.Context, id uuid.UUID) (*api.Node, error) {
+	node, err := core.q.GetNodeByID(ctx, id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -74,8 +110,63 @@ func (core *CorePGX) GetNodeByID(id uuid.UUID) (*Node, error) {
 	return pgxNodeToCoreNode(&node), nil
 }
 
+func (core *CorePGX) GetNodeSchedule(ctx context.Context, id uuid.UUID) (api.Schedule, error) {
+	q := database.New(core.pool)
+	dbschedules, err := q.GetCombinedScheduleByNode(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// extract all of the entries from all of the schedules assigned
+	var sched api.Schedule
+	for _, dbsched := range dbschedules {
+		sched = append(sched, dbsched.Entries...)
+	}
+
+	if sched == nil {
+		sched = make(api.Schedule, 0)
+	}
+
+	return sched, nil
+}
+
+func (core *CorePGX) CreateNode(ctx context.Context, req api.RegistrationRequest) error {
+	q := database.New(core.pool)
+	var params database.CreateNodeParams
+
+	id, err := util.Base64toPubKey(req.PublicKey)
+	if err != nil {
+		return err
+	}
+	params.ID = crypto.Fingerprint(id)
+	if req.OrganizationID == nil {
+		params.OrganizationID.Valid = false
+	} else {
+		params.OrganizationID.Bytes = *req.OrganizationID
+		params.OrganizationID.Valid = true
+	}
+	params.PublicKey = req.PublicKey
+	params.Hostname = req.Hostname
+	params.ClientVersion = req.ClientVersion
+	params.OsKernel = req.OSKernel
+	params.OsMajor = int32(req.OSMajor)
+	params.OsMinor = int32(req.OSMinor)
+	params.OsBuild = int32(req.OSBuild)
+	params.PackagesChoco = req.PackagesChoco
+	params.PackagesSystem = req.PackagesSystem
+
+	err = q.CreateNode(ctx, params)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create node")
+	}
+
+	// no errors, node was created
+	return nil
+}
+
 func testPool(ctx context.Context, pool *pgxpool.Pool) error {
-	const target = 1
+	var target = rand.Intn(10000)
+	var result int
 
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
@@ -83,7 +174,6 @@ func testPool(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	defer conn.Release()
 
-	var result int
 	err = conn.QueryRow(ctx, fmt.Sprintf("SELECT %d", target)).Scan(&result)
 	if err != nil {
 		return err
@@ -115,5 +205,6 @@ func NewCorePGX(ctx context.Context, connStr string) (*CorePGX, error) {
 
 	return &CorePGX{
 		pool: pool,
+		q:    database.New(pool),
 	}, nil
 }
