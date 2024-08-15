@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 )
@@ -11,12 +12,18 @@ import (
 const APP_NAME = "SweetTooth"
 
 // create the base directory to store configs and cache
-func Bootstrap() error {
-	return os.MkdirAll(baseDirectory(), 0600)
+func Bootstrap() (err error) {
+	for _, p := range []string{dirBase(), dirLogs()} {
+		err = os.MkdirAll(p, 0600)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 // by default, use PROGRAMDATA on Windows and /etc on nix
-func baseDirectory() string {
+func dirBase() string {
 	switch runtime.GOOS {
 	case "windows":
 		programdata := os.Getenv("PROGRAMDATA")
@@ -31,26 +38,39 @@ func baseDirectory() string {
 	}
 }
 
+// get the base log directory
+func dirLogs() string {
+	return configPath("logs")
+}
+
+func dirKeys() string {
+	return configPath("keys")
+}
+
 // return the full configuration file path given a filename
-func configFile(filename string) string {
-	err := Bootstrap()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to bootstrap the configuration directory")
-	}
-	return path.Join(baseDirectory(), filename)
+func configPath(names ...string) string {
+	return path.Join(append([]string{dirBase()}, names...)...)
+}
+
+func ClientConfig() string {
+	return configPath(strings.ToLower(APP_NAME) + ".yaml")
 }
 
 // client private key location
 func SecretKey() string {
-	return configFile("secret.pem.enc")
+	return path.Join(dirKeys(), "secret.pem")
 }
 
 // client public key location
 func PublicKey() string {
-	return configFile("public.pem")
+	return path.Join(dirKeys(), "public.pem")
 }
 
 // the JSON cache storage which keeps recent state information
 func Cache() string {
-	return configFile("cache.json")
+	return configPath("cache.json")
+}
+
+func LogFile() string {
+	return path.Join(dirLogs(), strings.ToLower(APP_NAME)+".log")
 }
