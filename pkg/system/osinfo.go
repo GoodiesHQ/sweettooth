@@ -1,6 +1,7 @@
 package system
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -78,7 +79,7 @@ func GetSystemInfo() (*SystemInfo, error) {
 	}
 
 	osinfo.IsServer = strings.Contains(strings.ToLower(osinfo.Name), "server")
-	log.Info().Str("osname", osinfo.Name).Msg("Got System Info")
+	log.Debug().Str("hostname", sysinfo.Hostname).Str("osname", osinfo.Name).Str("version", fmt.Sprintf("%v.%v.%v", osinfo.Major, osinfo.Minor, osinfo.Build)).Msg("Got System Info")
 
 	return &sysinfo, nil
 }
