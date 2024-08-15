@@ -8,74 +8,174 @@ package database
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/goodieshq/sweettooth/pkg/schedule"
+	"github.com/google/uuid"
 )
 
-const getNodeSchedules = `-- name: GetNodeSchedules :many
-WITH node_schedules AS (
-    SELECT 
-        ns.schedule_id,
-        s.name,
-        s.days,
-        s.start_time,
-        s.finish_time
-    FROM 
-        node_schedule_assignments ns
-    JOIN 
-        schedules s ON ns.schedule_id = s.id
-    WHERE 
-        ns.node_id = $1
-), group_schedules AS (
-    SELECT 
-        gs.schedule_id,
-        s.name,
-        s.days,
-        s.start_time,
-        s.finish_time
-    FROM 
-        node_group_assignments nga
-    JOIN 
-        group_schedule_assignments gs ON nga.group_id = gs.group_id
-    JOIN 
-        schedules s ON gs.schedule_id = s.id
-    WHERE 
-        nga.node_id = $1
-)
+const getAllSchedulesByNode = `-- name: GetAllSchedulesByNode :many
 SELECT DISTINCT
-    schedule_id, name, days, start_time, finish_time
-FROM 
-    node_schedules
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries,
+    'node' as entity_type,
+    nsa.node_id as entity_id
+FROM
+    schedules
+JOIN
+    node_schedule_assignments nsa on nsa.schedule_id = schedules.id
+WHERE
+    nsa.node_id = $1
 UNION
 SELECT DISTINCT
-    schedule_id, name, days, start_time, finish_time
-FROM 
-    group_schedules
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries,
+    'group' as entity_type,
+    gsa.group_id as entity_id
+FROM
+    schedules
+JOIN
+    group_schedule_assignments gsa ON schedules.id = gsa.schedule_id
+JOIN
+    groups grp ON gsa.group_id = grp.id
+JOIN
+    node_group_assignments nga ON grp.id = nga.group_id
+WHERE
+    nga.node_id = $1
+UNION
+SELECT DISTINCT
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries,
+    'org' as entity_type,
+    osa.organization_id as entity_id
+FROM
+    schedules
+JOIN 
+    organization_schedule_assignments osa ON schedules.id = osa.schedule_id
+JOIN
+    nodes on nodes.organization_id = osa.organization_id
+WHERE
+    nodes.id = $1
 `
 
-type GetNodeSchedulesRow struct {
-	ScheduleID int32
-	Name       string
-	Days       string
-	StartTime  pgtype.Time
-	FinishTime pgtype.Time
+type GetAllSchedulesByNodeRow struct {
+	ID             uuid.UUID         `db:"id" json:"id"`
+	OrganizationID uuid.UUID         `db:"organization_id" json:"organization_id"`
+	Name           string            `db:"name" json:"name"`
+	Entries        schedule.Schedule `db:"entries" json:"entries"`
+	EntityType     string            `db:"entity_type" json:"entity_type"`
+	EntityID       uuid.UUID         `db:"entity_id" json:"entity_id"`
 }
 
-// Get a list of all schedules that apply to an node
-func (q *Queries) GetNodeSchedules(ctx context.Context, nodeID pgtype.UUID) ([]GetNodeSchedulesRow, error) {
-	rows, err := q.db.Query(ctx, getNodeSchedules, nodeID)
+func (q *Queries) GetAllSchedulesByNode(ctx context.Context, nodeID uuid.UUID) ([]GetAllSchedulesByNodeRow, error) {
+	rows, err := q.db.Query(ctx, getAllSchedulesByNode, nodeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetNodeSchedulesRow
+	var items []GetAllSchedulesByNodeRow
 	for rows.Next() {
-		var i GetNodeSchedulesRow
+		var i GetAllSchedulesByNodeRow
 		if err := rows.Scan(
-			&i.ScheduleID,
+			&i.ID,
+			&i.OrganizationID,
 			&i.Name,
-			&i.Days,
-			&i.StartTime,
-			&i.FinishTime,
+			&i.Entries,
+			&i.EntityType,
+			&i.EntityID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCombinedScheduleByNode = `-- name: GetCombinedScheduleByNode :many
+SELECT DISTINCT
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries
+FROM
+    schedules
+JOIN
+    node_schedule_assignments nsa on nsa.schedule_id = schedules.id
+WHERE
+    nsa.node_id = $1
+UNION
+SELECT DISTINCT
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries
+FROM
+    schedules
+JOIN
+    group_schedule_assignments gsa ON schedules.id = gsa.schedule_id
+JOIN
+    groups grp ON gsa.group_id = grp.id
+JOIN
+    node_group_assignments nga ON grp.id = nga.group_id
+WHERE
+    nga.node_id = $1
+UNION
+SELECT DISTINCT
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries
+FROM
+    schedules
+JOIN 
+    organization_schedule_assignments osa ON schedules.id = osa.schedule_id
+JOIN
+    nodes on nodes.organization_id = osa.organization_id
+WHERE
+    nodes.id = $1
+`
+
+func (q *Queries) GetCombinedScheduleByNode(ctx context.Context, nodeID uuid.UUID) ([]Schedule, error) {
+	rows, err := q.db.Query(ctx, getCombinedScheduleByNode, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Schedule
+	for rows.Next() {
+		var i Schedule
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Name,
+			&i.Entries,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSchedulesByGroup = `-- name: GetSchedulesByGroup :many
+
+SELECT
+    schedules.id, schedules.organization_id, schedules.name, schedules.entries
+FROM
+    schedules
+JOIN
+    group_schedule_assignments gsa on gsa.schedule_id = schedules.id
+WHERE
+    gsa.group_id=$1
+`
+
+// Get a list of all schedules that apply to an node
+func (q *Queries) GetSchedulesByGroup(ctx context.Context, groupID uuid.UUID) ([]Schedule, error) {
+	rows, err := q.db.Query(ctx, getSchedulesByGroup, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Schedule
+	for rows.Next() {
+		var i Schedule
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Name,
+			&i.Entries,
 		); err != nil {
 			return nil, err
 		}

@@ -7,8 +7,6 @@ package database
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getAllOrganizations = `-- name: GetAllOrganizations :many
@@ -33,33 +31,4 @@ func (q *Queries) GetAllOrganizations(ctx context.Context) ([]Organization, erro
 		return nil, err
 	}
 	return items, nil
-}
-
-const getNodeByID = `-- name: GetNodeByID :one
-SELECT id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, connected_on, approved_on, last_seen, approved FROM nodes WHERE id=$1
-`
-
-func (q *Queries) GetNodeByID(ctx context.Context, id pgtype.UUID) (Node, error) {
-	row := q.db.QueryRow(ctx, getNodeByID, id)
-	var i Node
-	err := row.Scan(
-		&i.ID,
-		&i.OrganizationID,
-		&i.PublicKey,
-		&i.Label,
-		&i.Hostname,
-		&i.ClientVersion,
-		&i.PendingSources,
-		&i.PendingSchedule,
-		&i.OsKernel,
-		&i.OsName,
-		&i.OsMajor,
-		&i.OsMinor,
-		&i.OsBuild,
-		&i.ConnectedOn,
-		&i.ApprovedOn,
-		&i.LastSeen,
-		&i.Approved,
-	)
-	return i, err
 }
