@@ -3,6 +3,12 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS citext;
 
+CREATE TYPE schedule_entry AS (
+    rrule TEXT,
+    time_beg SMALLINT,
+    time_end SMALLINT
+);
+
 -- Each node will be categorized into organizations and 0 or more groups within each organization
 CREATE TABLE IF NOT EXISTS organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- random UUID 
@@ -25,13 +31,28 @@ CREATE TABLE IF NOT EXISTS nodes (
   os_major INT NOT NULL, -- the OS major version
   os_minor INT NOT NULL, -- the OS minor version
   os_build INT NOT NULL, -- the OS build version
+  packages_choco JSONB NOT NULL, -- SoftwareList managed by chocolatey
+  packages_system JSONB NOT NULL, -- SoftwareList NOT managed by chocolatey
+  packages_outdated JSONB NOT NULL, --  SoftwareOutdatedList managed by chocolatey
+  packages_updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- last time the packages were updated
   connected_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- when the node initially registered
   approved_on TIMESTAMP DEFAULT NULL, -- when the node was originally approvied
   last_seen TIMESTAMP DEFAULT NULL, -- when the node has most recently checked in
   approved BOOLEAN NOT NULL DEFAULT FALSE -- determines whether the device is approved or not
 );
 
--- Groups will be statically composed of  
+-- this is meant to keep a complete history of all package changes
+CREATE TABLE IF NOT EXISTS node_package_changelog (
+  id SERIAL PRIMARY KEY,
+  node_id UUID NOT NULL REFERENCES nodes(id),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  packages_choco JSONB NOT NULL,
+  packages_system JSONB NOT NULL,
+  packages_outdated JSONB NOT NULL,
+  timestamp TIMESTAMP NOT NULL
+);
+
+-- Groups will be statically composed of nodes
 CREATE TABLE IF NOT EXISTS groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- random UUID
   organization_id UUID NOT NULL REFERENCES organizations(id), -- each group exists within exactly one organization
@@ -67,39 +88,69 @@ CREATE TABLE IF NOT EXISTS package_jobs(
   output TEXT DEFAULT NULL
 );
 
-CREATE TABLE IF NOT EXISTS schedule_jobs(
-  id BIGSERIAL PRIMARY KEY,
-  node_id UUID NOT NULL REFERENCES nodes(id),
-  group_id UUID REFERENCES groups(id) DEFAULT NULL,
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  completed_at TIMESTAMP DEFAULT NULL
-);
-
+-- Schedules are iCal RRules along with start/end times
 CREATE TABLE IF NOT EXISTS schedules (
-  id SERIAL PRIMARY KEY,
-  name CITEXT NOT NULL,
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  days CITEXT NOT NULL,
-  start_time TIME NOT NULL,
-  finish_time TIME NOT NULL,
-  UNIQUE(organization_id, name)
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- unique ID for each schedule
+  organization_id UUID NOT NULL REFERENCES organizations(id), -- organization in which the schedule exists
+  name CITEXT NOT NULL, -- the unique name of the schedule
+  entries JSONB NOT NULL, -- a list of entries each containing an iCal RRule and start/stop times
+  UNIQUE(organization_id, name) -- each schedule must have a unique name within the organization
 );
 
+-- Schedules assigned to individual nodes
 CREATE TABLE IF NOT EXISTS node_schedule_assignments (
+  schedule_id UUID NOT NULL REFERENCES schedules(id),
   node_id UUID NOT NULL REFERENCES nodes(id),
-  schedule_id INTEGER NOT NULL REFERENCES schedules(id),
   organization_id UUID NOT NULL REFERENCES organizations(id),
-  PRIMARY KEY(node_id, schedule_id, organization_id)
+  PRIMARY KEY(schedule_id, node_id, organization_id)
 );
 
+-- Schedules assigned to groups
 CREATE TABLE IF NOT EXISTS group_schedule_assignments (
+  schedule_id UUID NOT NULL REFERENCES schedules(id),
   group_id UUID NOT NULL REFERENCES groups(id),
-  schedule_id INTEGER NOT NULL REFERENCES schedules(id),
   organization_id UUID NOT NULL REFERENCES organizations(id),
-  PRIMARY KEY(group_id, schedule_id, organization_id)
+  PRIMARY KEY(schedule_id, group_id, organization_id)
 );
 
+-- Schedules assigned to the entire organization
+CREATE TABLE IF NOT EXISTS organization_schedule_assignments (
+  schedule_id UUID NOT NULL REFERENCES schedules(id),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  PRIMARY KEY(schedule_id, organization_id)
+);
+
+-- Sources are iCal RRules along with start/end times
+CREATE TABLE IF NOT EXISTS sources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- unique ID for each source
+  organization_id UUID NOT NULL REFERENCES organizations(id), -- organization in which the source exists
+  name CITEXT NOT NULL, -- the unique name of the source
+  entries JSONB NOT NULL, -- a list of entries each containing the chocolatey sources
+  UNIQUE(organization_id, name) -- each source must have a unique name within the organization
+);
+
+-- Sources assigned to individual nodes
+CREATE TABLE IF NOT EXISTS node_source_assignments (
+  source_id UUID NOT NULL REFERENCES sources(id),
+  node_id UUID NOT NULL REFERENCES nodes(id),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  PRIMARY KEY(source_id, node_id, organization_id)
+);
+
+-- Sources assigned to groups
+CREATE TABLE IF NOT EXISTS group_source_assignments (
+  source_id UUID NOT NULL REFERENCES sources(id),
+  group_id UUID NOT NULL REFERENCES groups(id),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  PRIMARY KEY(source_id, group_id, organization_id)
+);
+
+-- Sources assigned to the entire organization
+CREATE TABLE IF NOT EXISTS organization_source_assignments (
+  source_id UUID NOT NULL REFERENCES sources(id),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  PRIMARY KEY(source_id, organization_id)
+);
 
 /*
 DROP TABLE IF EXISTS group_schedule_assignments;
