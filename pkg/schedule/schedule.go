@@ -1,114 +1,131 @@
 package schedule
 
 import (
-	"reflect"
-	"strings"
+	"fmt"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/teambition/rrule-go"
 )
 
 type Schedule []ScheduleEntry
+type SchedGroup string
+type ScheduleGroup map[SchedGroup]Schedule
+
+const (
+	ISO8601 = "20060102T150405Z"
+)
+
+var (
+	// RRULE entries should be processed starting Jan 1 1970 according to the local time zone
+
+	SCHED_START_TIME        = time.Date(1970, time.January, 1, 0, 0, 0, 0, time.Local).UTC()
+	SCHED_START_TIME_SUFFIX = fmt.Sprintf(";DTSTART=%s", SCHED_START_TIME.Format(ISO8601))
+)
+
+const (
+	SchedGroupNode         SchedGroup = "node"
+	SchedGroupGroup        SchedGroup = "group"
+	SchedGroupOrganization SchedGroup = "organization"
+)
+
+type Time16 uint16
+
+func (t Time16) H() int {
+	return int(t >> 8 & 0xff)
+}
+
+func (t Time16) M() int {
+	return int(t >> 8 & 0xff)
+}
+
+func NewTime16(hr int, min int) Time16 {
+	h := uint16(hr & 0xff)
+	m := uint16(min & 0xff)
+	return Time16(h<<8 | m)
+}
 
 var schedule Schedule
 
-// model HH:MM 24-hour time format
-type ScheduleTime struct {
-	H uint8 `json:"hour"`
-	M uint8 `json:"minute"`
-}
-
-func (st ScheduleTime) Value() uint16 {
-	return uint16(st.H)<<8 | uint16(st.M)
+type AllDay struct {
+	T   time.Time // a given arbitrary timestamp
+	Beg time.Time // the beginning of the day T is in
+	End time.Time // the end of the day T is in (Beg + 24hrs)
 }
 
 type ScheduleEntry struct {
-	Weeks []string     `json:"weeks"`
-	Days  []string     `json:"days"`
-	Start ScheduleTime `json:"start"`
-	End   ScheduleTime `json:"end"`
-}
-
-func (entry ScheduleEntry) Normalized() ScheduleEntry {
-	weeksNormal := make([]string, len(entry.Weeks))
-	for i, week := range entry.Weeks {
-		weeksNormal[i] = strings.ToUpper(week)
-	}
-
-	daysNormal := make([]string, len(entry.Days))
-	for i, day := range entry.Days {
-		daysNormal[i] = strings.ToUpper(day)
-	}
-
-	return ScheduleEntry{
-		Weeks: weeksNormal,
-		Days:  daysNormal,
-		Start: entry.Start,
-		End:   entry.End,
-	}
-}
-
-func (entry ScheduleEntry) Equals(other ScheduleEntry) bool {
-	return reflect.DeepEqual(entry, other)
-}
-
-func (sched Schedule) Contains(entry ScheduleEntry) bool {
-	for _, e := range sched {
-		if e.Equals(entry) {
-			return true
-		}
-	}
-	return false
+	RRule   string `json:"rrule"`
+	TimeBeg Time16 `json:"time_beg"`
+	TimeEnd Time16 `json:"time_end"`
 }
 
 func Bootstrap() error {
-	SetSchedule(CreateSchedule(nil))
+	// by default, the schedule should never return true without explicitly receiving it from the server
+	SetSchedule(Schedule(nil))
 	return nil
 }
 
 func SetSchedule(sched Schedule) {
 	schedule = sched
+	log.Debug().Msg("Updated the local system schedule")
 }
 
-func CreateSchedule(entries []ScheduleEntry) Schedule {
-	return Schedule(entries)
-}
-
-func AddEntry(entry ScheduleEntry) {
-	entry = entry.Normalized()
-	for _, existing := range schedule {
-		if entry.Equals(existing) {
-			return
-		}
+func (entry ScheduleEntry) matches(allday *AllDay) bool {
+	if entry.RRule == "" {
+		// empty rules are always false
+		return false
 	}
-	schedule = append(schedule, entry)
+
+	rr, err := rrule.StrToRRule(entry.RRule)
+
+	if err != nil {
+		// invalid rules are always false
+		log.Warn().Err(err).Str("rrule", entry.RRule+SCHED_START_TIME_SUFFIX).Msg("invalid rrule")
+		return false
+	}
+
+	// check if no DTSTART was provided within the rrule
+	if (rr.OrigOptions.Dtstart == time.Time{}) {
+		// no start time was provided in the rule, use default time and re-run
+		return ScheduleEntry{
+			RRule:   entry.RRule + SCHED_START_TIME_SUFFIX,
+			TimeBeg: entry.TimeBeg,
+			TimeEnd: entry.TimeEnd,
+		}.matches(allday)
+	}
+
+	// check rule instances between the start and end of today
+	if len(rr.Between(allday.Beg, allday.End, true)) == 0 {
+		return false
+	}
+
+	// the day matches, now check the time range
+	n := NewTime16(allday.T.Hour(), allday.T.Minute())
+	return n >= entry.TimeBeg && n <= entry.TimeEnd
 }
 
-func contains(haystack []string, needle string) bool {
-	needle = strings.ToUpper(needle)
-	for _, check := range haystack {
-		if needle == strings.ToUpper(check) {
+func NewAllDay(t time.Time) AllDay {
+	// get the beginning and ending of the day at time t
+	beg := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	end := beg.Add(24 * time.Hour)
+	return AllDay{T: t, Beg: beg, End: end}
+}
+
+func Today() AllDay {
+	return NewAllDay(time.Now())
+}
+
+// System-wide, check if the current schedule includes right now
+func Now() bool {
+	// get the current time, day beginning, and day end timestamps
+	today := Today()
+
+	// iterate over the schedule entries
+	for _, entry := range schedule {
+		// check if the entry includes the current timestamp
+		if entry.matches(&today) {
 			return true
 		}
-	}
-	return false
-}
-
-func Now() bool {
-	now := time.Now()
-
-	nowDay := strings.ToUpper(now.Weekday().String()[:3])
-	nowTime := ScheduleTime{H: uint8(now.Hour()), M: uint8(now.Minute())}.Value()
-
-	for _, entry := range schedule {
-		// check if the current day
-		if !contains(entry.Days, nowDay) {
-			continue
-		}
-
-		if (nowTime < entry.Start.Value()) || (nowTime > entry.End.Value()) {
-			continue
-		}
-
-		return true
 	}
 
 	return false
