@@ -8,14 +8,17 @@ type Software struct {
 	Version string `json:"version"`
 }
 
+type SoftwareList []Software
+
 // Software which has a newer version available
 type SoftwareOutdated struct {
 	Name       string `json:"name"`
-	VersionOld string `json:"versionOld"`
-	VersionNew string `json:"versionNew"`
+	VersionOld string `json:"version_old"`
+	VersionNew string `json:"version_new"`
 	Pinned     bool   `json:"pinned"`
 }
 
+type SoftwareOutdatedList []SoftwareOutdated
 type SoftwareMap struct {
 	Regex   regexp.Regexp // a regex to check against the system-reported software name
 	Package string        // the corresponding chocolatey package that should be targetted upon a match
