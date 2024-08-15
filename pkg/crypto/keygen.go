@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/goodieshq/sweettooth/pkg/config"
+	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,16 +18,8 @@ var keyMu sync.Mutex
 
 // Checkes whether the signing keys have already been generated. These will be used for authentication tokens
 func keysExist() bool {
-	exists := func(path string) bool {
-		if info, err := os.Stat(path); err != nil {
-			return false
-		} else {
-			return !info.IsDir() // it should exist and NOT be a directory
-		}
-	}
-
 	// ensure both public and private keys exist
-	return exists(config.SecretKey()) && exists(config.PublicKey())
+	return util.IsFile(config.SecretKey()) && util.IsFile(config.PublicKey())
 }
 
 // load the keys from disk into memory
