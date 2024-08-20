@@ -16,10 +16,20 @@ CREATE TABLE IF NOT EXISTS organizations (
   UNIQUE(name) -- all organization names must be unique
 );
 
+-- Registration keys for an organization
+CREATE TABLE IF NOT EXISTS registration_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- the random ID used as the token
+  organization_id UUID NOT NULL REFERENCES organizations(id), -- organization thi skey is active for
+  name CITEXT NOT NULL, -- a name for the registration token
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- when this registration token was created
+  expires_at TIMESTAMP DEFAULT NULL, -- when this registration token expires
+  UNIQUE(organization_id, name) -- name should be unique within an organization
+);
+
 -- Nodes represent individual machines that are connecting to the server
 CREATE TABLE IF NOT EXISTS nodes (
   id UUID PRIMARY KEY, -- node ID should be the UUIDv5 of the public key
-  organization_id UUID REFERENCES organizations(id) DEFAULT NULL, -- each node should be associated with exactly 1 organization.
+  organization_id UUID NOT NULL REFERENCES organizations(id), -- each node should be associated with exactly 1 organization.
   public_key TEXT NOT NULL, -- node-generated ED25519 public key in base64 format
   label CITEXT DEFAULT NULL, -- admin-provided name that will be used in place of the hostname
   hostname CITEXT NOT NULL, -- the node's system hostname
@@ -68,11 +78,12 @@ CREATE TABLE IF NOT EXISTS node_group_assignments (
 );
 
 CREATE TABLE IF NOT EXISTS package_jobs(
-  id BIGSERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- random job UUID
   node_id UUID NOT NULL REFERENCES nodes(id),
   group_id UUID REFERENCES groups(id) DEFAULT NULL,
   organization_id UUID NOT NULL REFERENCES organizations(id),
-  --
+  attempts INTEGER NOT NULL DEFAULT 0, -- number of attempts made by the client to install
+  -- PARAMETERS:
   action INTEGER NOT NULL, -- install, upgrade, uninstall
   name CITEXT NOT NULL, -- the chocolatey package name for any action
   version CITEXT DEFAULT NULL, -- the chocolatey package version (for install, upgrade)
@@ -81,11 +92,16 @@ CREATE TABLE IF NOT EXISTS package_jobs(
   force BOOLEAN NOT NULL DEFAULT FALSE,
   verbose_output BOOLEAN NOT NULL DEFAULT FALSE,
   not_silent BOOLEAN NOT NULL DEFAULT FALSE,
-  --
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- RESULT:
+  status INTEGER NOT NULL DEFAULT 0,
+  exit_code INTEGER DEFAULT NULL,
+  output TEXT DEFAULT NULL,
+  error TEXT DEFAULT NULL,
+  -- metadata
+  attempted_at TIMESTAMP DEFAULT NULL,
   completed_at TIMESTAMP DEFAULT NULL,
-  status INTEGER DEFAULT 0,
-  output TEXT DEFAULT NULL
+  expires_at TIMESTAMP DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Schedules are iCal RRules along with start/end times
