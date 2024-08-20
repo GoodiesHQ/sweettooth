@@ -1,32 +1,16 @@
 package util
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
-func SetRequestContext(r *http.Request, ctx context.Context) {
-	*r = *r.WithContext(ctx)
-}
-
-func SetRequestContextValue(r *http.Request, key string, value interface{}) {
-	SetRequestContext(r, context.WithValue(r.Context(), key, value))
-}
-
-func SetRequestError(r *http.Request, err error) {
-	SetRequestContextValue(r, "error", err)
-}
-
-func SetRequestNodeID(r *http.Request, nodeid uuid.UUID) {
-	SetRequestContextValue(r, "nodeid", &nodeid)
-}
-
+// countdown per second with ascii escape sequences, e.g. ("blastoff in ", 3, "...")
 func Countdown(prefix string, n uint, suffix string) {
 	for i := n; i > 0; i-- {
 		fmt.Printf("%s%d%s", prefix, i, suffix)
@@ -40,14 +24,28 @@ func Dumps(obj any) string {
 	return string(data)
 }
 
-func Rid(r *http.Request) *uuid.UUID {
-	return r.Context().Value("nodeid").(*uuid.UUID)
-}
-
 func IsFile(path string) bool {
 	if info, err := os.Stat(path); err != nil {
 		return false
 	} else {
 		return !info.IsDir() // it should exist and NOT be a directory
+	}
+}
+
+// defer this to make any function recoverable and log the error
+func Recoverable(silent bool) {
+	if r := recover(); r != nil {
+		if !silent {
+			var evt = log.Error()
+			switch r := r.(type) {
+			case error:
+				evt = evt.AnErr("recovered", r)
+			case string:
+				evt = evt.AnErr("recovered", errors.New(r))
+			default:
+				evt = evt.Any("recovered", r)
+			}
+			evt.Stack().Msg("client panicked")
+		}
 	}
 }

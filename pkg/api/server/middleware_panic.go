@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -17,7 +18,7 @@ func MiddlewarePanic(next http.Handler) http.Handler {
 			if val := recover(); val != nil {
 				switch val := val.(type) {
 				case string:
-					err = fmt.Errorf(val)
+					err = errors.New(val)
 				case error:
 					err = val
 				default:

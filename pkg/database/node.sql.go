@@ -10,7 +10,6 @@ import (
 
 	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const checkInNode = `-- name: CheckInNode :exec
@@ -27,7 +26,7 @@ func (q *Queries) CheckInNode(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const createNode = `-- name: CreateNode :exec
+const createNode = `-- name: CreateNode :one
 INSERT INTO
     nodes (
         id,
@@ -36,31 +35,49 @@ INSERT INTO
         hostname,
         client_version,
         os_kernel, os_name, os_major, os_minor, os_build,
-        packages_choco, packages_system
+        packages_choco, packages_system, packages_outdated
     )
-VALUES
-    ( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+SELECT
+    $1, -- id
+    rt.organization_id, -- organization_id from registration_tokens
+    $3, -- public_key
+    $4, -- hostname
+    $5, -- client_version
+    $6, -- os_kernel
+    $7, -- os_name
+    $8, -- os_major
+    $9, -- os_minor
+    $10, -- os_build
+    $11, -- packages_choco
+    $12, -- packages_system
+    $13 -- packages_outdated
+FROM
+    registration_tokens rt
+WHERE
+    rt.id = $2 -- registration token value
+RETURNING id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, packages_choco, packages_system, packages_outdated, packages_updated_at, connected_on, approved_on, last_seen, approved
 `
 
 type CreateNodeParams struct {
-	ID             uuid.UUID         `db:"id" json:"id"`
-	OrganizationID pgtype.UUID       `db:"organization_id" json:"organization_id"`
-	PublicKey      string            `db:"public_key" json:"public_key"`
-	Hostname       string            `db:"hostname" json:"hostname"`
-	ClientVersion  string            `db:"client_version" json:"client_version"`
-	OsKernel       string            `db:"os_kernel" json:"os_kernel"`
-	OsName         string            `db:"os_name" json:"os_name"`
-	OsMajor        int32             `db:"os_major" json:"os_major"`
-	OsMinor        int32             `db:"os_minor" json:"os_minor"`
-	OsBuild        int32             `db:"os_build" json:"os_build"`
-	PackagesChoco  util.SoftwareList `db:"packages_choco" json:"packages_choco"`
-	PackagesSystem util.SoftwareList `db:"packages_system" json:"packages_system"`
+	ID               uuid.UUID                 `db:"id" json:"id"`
+	ID_2             uuid.UUID                 `db:"id_2" json:"id_2"`
+	PublicKey        string                    `db:"public_key" json:"public_key"`
+	Hostname         string                    `db:"hostname" json:"hostname"`
+	ClientVersion    string                    `db:"client_version" json:"client_version"`
+	OsKernel         string                    `db:"os_kernel" json:"os_kernel"`
+	OsName           string                    `db:"os_name" json:"os_name"`
+	OsMajor          int32                     `db:"os_major" json:"os_major"`
+	OsMinor          int32                     `db:"os_minor" json:"os_minor"`
+	OsBuild          int32                     `db:"os_build" json:"os_build"`
+	PackagesChoco    util.SoftwareList         `db:"packages_choco" json:"packages_choco"`
+	PackagesSystem   util.SoftwareList         `db:"packages_system" json:"packages_system"`
+	PackagesOutdated util.SoftwareOutdatedList `db:"packages_outdated" json:"packages_outdated"`
 }
 
-func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) error {
-	_, err := q.db.Exec(ctx, createNode,
+func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, error) {
+	row := q.db.QueryRow(ctx, createNode,
 		arg.ID,
-		arg.OrganizationID,
+		arg.ID_2,
 		arg.PublicKey,
 		arg.Hostname,
 		arg.ClientVersion,
@@ -71,13 +88,38 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) error {
 		arg.OsBuild,
 		arg.PackagesChoco,
 		arg.PackagesSystem,
+		arg.PackagesOutdated,
 	)
-	return err
+	var i Node
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.PublicKey,
+		&i.Label,
+		&i.Hostname,
+		&i.ClientVersion,
+		&i.PendingSources,
+		&i.PendingSchedule,
+		&i.OsKernel,
+		&i.OsName,
+		&i.OsMajor,
+		&i.OsMinor,
+		&i.OsBuild,
+		&i.PackagesChoco,
+		&i.PackagesSystem,
+		&i.PackagesOutdated,
+		&i.PackagesUpdatedAt,
+		&i.ConnectedOn,
+		&i.ApprovedOn,
+		&i.LastSeen,
+		&i.Approved,
+	)
+	return i, err
 }
 
 const getNodeByID = `-- name: GetNodeByID :one
 SELECT
-    id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, packages_choco, packages_system, packages_outdated, packages_updated_at, connected_on, approved_on, last_seen, approved
+    id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, packages_choco, packages_system, packages_outdated, packages_updated_at, connected_on, approved_on, last_seen, approved -- get the full node by ID, try and keep this to a minimum as there can be a lot of data per node
 FROM
     nodes
 WHERE
@@ -113,6 +155,23 @@ func (q *Queries) GetNodeByID(ctx context.Context, id uuid.UUID) (Node, error) {
 	return i, err
 }
 
+const getNodePackages = `-- name: GetNodePackages :one
+SELECT packages_choco, packages_system, packages_outdated FROM nodes WHERE id = $1
+`
+
+type GetNodePackagesRow struct {
+	PackagesChoco    util.SoftwareList         `db:"packages_choco" json:"packages_choco"`
+	PackagesSystem   util.SoftwareList         `db:"packages_system" json:"packages_system"`
+	PackagesOutdated util.SoftwareOutdatedList `db:"packages_outdated" json:"packages_outdated"`
+}
+
+func (q *Queries) GetNodePackages(ctx context.Context, id uuid.UUID) (GetNodePackagesRow, error) {
+	row := q.db.QueryRow(ctx, getNodePackages, id)
+	var i GetNodePackagesRow
+	err := row.Scan(&i.PackagesChoco, &i.PackagesSystem, &i.PackagesOutdated)
+	return i, err
+}
+
 const setNodeApproval = `-- name: SetNodeApproval :exec
 UPDATE
     nodes
@@ -133,7 +192,38 @@ func (q *Queries) SetNodeApproval(ctx context.Context, arg SetNodeApprovalParams
 }
 
 const updateNodePackages = `-- name: UpdateNodePackages :exec
-UPDATE nodes SET packages_choco=$2, packages_system=$3, packages_outdated=$4 WHERE nodes.id=$1
+WITH
+    n AS (
+        SELECT
+            id, organization_id, packages_choco, packages_system, packages_outdated, packages_updated_at
+        FROM
+            nodes
+        WHERE
+            nodes.id=$1
+        FOR UPDATE
+    ),
+    i AS (
+        INSERT INTO
+            node_package_changelog(
+                node_id,
+                organization_id,
+                packages_choco,
+                packages_system,
+                packages_outdated,
+                timestamp
+            )
+        SELECT
+            id, organization_id, packages_choco, packages_system, packages_outdated, packages_updated_at
+        FROM
+            n
+        RETURNING id, node_id, organization_id, packages_choco, packages_system, packages_outdated, timestamp
+    )
+    UPDATE
+        nodes
+    SET
+        packages_updated_at=CURRENT_TIMESTAMP, packages_choco=$2, packages_system=$3, packages_outdated=$4
+    WHERE
+        id=(SELECT node_id FROM i) AND (packages_choco!=$2 OR packages_system!=$3 OR packages_outdated!=$4)
 `
 
 type UpdateNodePackagesParams struct {
@@ -192,57 +282,5 @@ type UpdateNodePackagesSystemParams struct {
 
 func (q *Queries) UpdateNodePackagesSystem(ctx context.Context, arg UpdateNodePackagesSystemParams) error {
 	_, err := q.db.Exec(ctx, updateNodePackagesSystem, arg.ID, arg.PackagesSystem)
-	return err
-}
-
-const updatePackages = `-- name: UpdatePackages :exec
-WITH
-    n AS (
-        SELECT
-            id, organization_id, packages_choco, packages_system, packages_outdated, packages_updated_at
-        FROM
-            nodes
-        WHERE
-            nodes.id=$1
-        FOR UPDATE
-    ),
-    i AS (
-        INSERT INTO
-            node_package_changelog(
-                node_id,
-                organization_id,
-                packages_choco,
-                packages_system,
-                packages_outdated,
-                timestamp
-            )
-        SELECT
-            id, organization_id, packages_choco, packages_system, packages_outdated, packages_updated_at
-        FROM
-            n
-        RETURNING id, node_id, organization_id, packages_choco, packages_system, packages_outdated, timestamp
-    )
-    UPDATE
-        nodes
-    SET
-        packages_updated_at=CURRENT_TIMESTAMP, packages_choco=$2, packages_system=$3, packages_outdated=$4
-    WHERE
-        id=(SELECT node_id FROM i)
-`
-
-type UpdatePackagesParams struct {
-	ID               uuid.UUID                 `db:"id" json:"id"`
-	PackagesChoco    util.SoftwareList         `db:"packages_choco" json:"packages_choco"`
-	PackagesSystem   util.SoftwareList         `db:"packages_system" json:"packages_system"`
-	PackagesOutdated util.SoftwareOutdatedList `db:"packages_outdated" json:"packages_outdated"`
-}
-
-func (q *Queries) UpdatePackages(ctx context.Context, arg UpdatePackagesParams) error {
-	_, err := q.db.Exec(ctx, updatePackages,
-		arg.ID,
-		arg.PackagesChoco,
-		arg.PackagesSystem,
-		arg.PackagesOutdated,
-	)
 	return err
 }

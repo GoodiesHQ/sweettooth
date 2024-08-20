@@ -1,49 +1,42 @@
 package tracker
 
 import (
-	"encoding/json"
-	"os"
+	"reflect"
+	"sync"
 
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/goodieshq/sweettooth/pkg/choco"
-	"github.com/goodieshq/sweettooth/pkg/config"
-	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/rs/zerolog/log"
 )
 
-var cachedPackages api.Packages
+var mu sync.Mutex
+var packages *api.Packages
 
-func SetPackages(packages *api.Packages) error {
-	cachedPackages = *packages
-	return savePackages()
+func isDifferent(p1, p2 *api.Packages) bool {
+	return (p1 == nil || p2 == nil) || !reflect.DeepEqual(*p1, *p2)
 }
 
-func loadPackages() error {
-	data, err := os.ReadFile(config.Cache())
-	if err != nil {
-		return err
-	}
-
-	var packages api.Packages
-	err = json.Unmarshal(data, &packages)
-	if err != nil {
-		return err
-	}
-
-	SetPackages(&packages)
-
-	return nil
+func IsEmpty() bool {
+	return packages == nil
 }
 
-func savePackages() error {
-	data, err := json.Marshal(&cachedPackages)
-	if err != nil {
-		return err
-	}
+func Reset() {
+	mu.Lock()
+	defer mu.Unlock()
 
-	return os.WriteFile(config.Cache(), data, 0600)
+	packages = nil
+}
+
+func SetPackages(packagesNew api.Packages) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	packages = &packagesNew
 }
 
 func Track() (*api.Packages, bool, error) {
+	log.Trace().Msg("tracker.Track called")
+
 	pkgChoco, pkgSystem, err := choco.ListAllInstalled()
 	if err != nil {
 		return nil, false, err
@@ -60,18 +53,14 @@ func Track() (*api.Packages, bool, error) {
 		PackagesOutdated: pkgOutdated,
 	}
 
-	return &pkg, util.Dumps(&pkg) != util.Dumps(&cachedPackages), nil
+	mu.Lock()
+	defer mu.Unlock()
+
+	return &pkg, isDifferent(&pkg, packages), nil
 }
 
 func Bootstrap() error {
-	// check if the cache file exists
-	if !util.IsFile(config.Cache()) {
-		if err := savePackages(); err != nil {
-			return err
-		}
-	}
-	if err := loadPackages(); err != nil {
-		return err
-	}
+	// set an empty cache to force a sync with the server first
+	Reset()
 	return nil
 }

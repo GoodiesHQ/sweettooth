@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/goodieshq/sweettooth/pkg/api/server"
+	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-func main() {
+func loop() {
 	// Initialize the logger for human-friendly output
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).With().Caller().Logger()
 
@@ -47,6 +48,16 @@ func main() {
 
 	srv.Run()
 
-	// server.NewCorePGX(context.Background())
-	// server.NewCorePGX()
+}
+
+func loopRecoverable() {
+	defer util.Recoverable(false)
+	loop() // main server application loop
+}
+
+func main() {
+	for {
+		loopRecoverable()
+		util.Countdown("restarting server in", 5, "s...")
+	}
 }

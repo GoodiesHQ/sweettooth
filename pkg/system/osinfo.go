@@ -25,6 +25,7 @@ type SystemInfo struct {
 }
 
 func GetSystemInfo() (*SystemInfo, error) {
+	log.Trace().Msg("GetSystemInfo called")
 	var sysinfo SystemInfo
 	var osinfo *OSInfo = &sysinfo.OSInfo
 
@@ -34,6 +35,7 @@ func GetSystemInfo() (*SystemInfo, error) {
 	}
 	sysinfo.Hostname = hostname
 
+	log.Debug().Msg("Opening CurrentVersion registry")
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
 	if err != nil {
 		return nil, err
@@ -74,6 +76,7 @@ func GetSystemInfo() (*SystemInfo, error) {
 	}
 	osinfo.Build = buildNumber
 
+	// check for windows 11 build numbers
 	if major == 10 && buildNumber >= 22000 {
 		osinfo.Name = strings.Replace(osinfo.Name, "indows 10", "indows 11", -1)
 	}

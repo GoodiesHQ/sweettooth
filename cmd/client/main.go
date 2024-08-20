@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"net/http"
 	"time"
 
@@ -15,7 +14,16 @@ import (
 	// "github.com/rs/zerolog/log"
 )
 
-func waitForCheck(cli *client.SweetToothClient) bool {
+const (
+	DEFAULT_PERIOD_CHECKIN = time.Second * 60 // checkin period
+	DEFAULT_PERIOD_LOOP    = time.Second * 10 // loop every 30 seconds
+	DEFAULT_PERIOD_RECOVER = time.Second * 10 // recover after 30 seconds
+)
+
+func doWaitForCheck(cli *client.SweetToothClient) bool {
+	log.Trace().Str("routine", "doWaitForCheck").Msg("called")
+	defer log.Trace().Str("routine", "doWaitForCheck").Msg("finished")
+
 	for {
 		if err := cli.Check(); err == nil {
 			return true
@@ -24,23 +32,6 @@ func waitForCheck(cli *client.SweetToothClient) bool {
 			log.Panic().Msg("node is no longer registered")
 		}
 		util.Countdown("Next check in attempt in ", 10, " seconds...")
-	}
-}
-
-func recoverable(silent bool) {
-	if r := recover(); r != nil {
-		if !silent {
-			var evt = log.Error()
-			switch r := r.(type) {
-			case error:
-				evt = evt.AnErr("recovered", r)
-			case string:
-				evt = evt.AnErr("recovered", errors.New(r))
-			default:
-				evt = evt.Any("recovered", r)
-			}
-			evt.Stack().Msg("client panicked")
-		}
 	}
 }
 
@@ -69,56 +60,32 @@ func loop(cli *client.SweetToothClient) bool {
 
 	// register the client if it is not already registered, otherwise silently continue
 	msg = "Failed to register the node. Retrying until success or panic..."
-	for !repeat(cli, register, msg)() {
+	for !repeat(cli, doRegister, msg)() {
 		util.Countdown("Re-trying registration procedure in ", 5, "s...")
 	}
 
 	// wait for the first successful check in (wait for an admin to approve the public key if necessary)
-	waitForCheck(cli)
-	log.Info().Msg("successfully checked in!")
-
-	// acquire the schedule for this node, just in case it has changed.
-	sched, err := cli.Schedule()
-	if err != nil {
-		log.Panic().Err(err).Msg("failed to get client schedule")
-	}
-
-	if sched != nil {
-		// set the schedule on the system
-		schedule.SetSchedule(sched)
-	}
+	doWaitForCheck(cli)
+	log.Debug().Msg("successfully checked in!")
 
 	// TODO: update sources
 
-	// track package changes based on the cache file to determine if any software changes have occurred
-	pkg, changed, err := tracker.Track()
-	if err != nil {
-		log.Panic().Err(err).Msg("software tracker failed to run")
-	}
-
-	// if the software has changed
-	if changed {
-		log.Info().Msg("software tracker identified software changes, updating cache")
-		// update tracker cache with the current packages
-		err = tracker.SetPackages(pkg)
-		if err != nil {
-			log.Panic().Err(err).Msg("failed to update the software tracker cache")
-		}
-	} else {
-		log.Debug().Msg("software tracker identified no software changes")
-	}
+	// acquire the schedule for this node, just in case it has changed.
+	doSchedule(cli)
 
 	// check package jobs if it is currently in a maintenance schedule
-	if schedule.Now() {
-		// TODO: perform package related jobs
+	if schedule.Now() || /* TODO: remove this*/ true {
+		doPackageJobs(cli)
 	}
 
-	// fmt.Println(util.Dumps(sched))
+	// inventory local software and compare with server's inventory, update if needed
+	doTracker(cli)
+
 	return true
 }
 
 func loopRecoverable(cli *client.SweetToothClient) (successful bool) {
-	defer recoverable(false)
+	defer util.Recoverable(false)
 	loop(cli)
 	return true
 }
@@ -126,13 +93,6 @@ func loopRecoverable(cli *client.SweetToothClient) (successful bool) {
 func main() {
 	// initialize the terminal logger for human-friendly output
 	initLoggingTerm()
-	schedule.SetSchedule(schedule.Schedule([]schedule.ScheduleEntry{
-		{
-			RRule:   "FREQ=DAILY;INTERVAL=1",
-			TimeBeg: schedule.NewTime16(2, 00),
-			TimeEnd: schedule.NewTime16(2, 29),
-		},
-	}))
 
 	// display the obligatory banner
 	banner()
@@ -144,6 +104,7 @@ func main() {
 	log.Info().Msg("✅ Bootstrapped config directory")
 
 	// load the configuration file (or create a default config)
+	log.Trace().Msg("Loading configuration file")
 	cfg, err := loadConf()
 	if err != nil {
 		log.Panic().Err(err).Send()
@@ -153,7 +114,7 @@ func main() {
 	initLoggingFile(config.LogFile())
 
 	// set the level if provided, use info by default
-	setLogLevel(cfg.Logging.level)
+	setLogLevel(cfg.Logging.Level)
 
 	// if insecure is used, then ignore SSL errors with the URL (not recommended)
 	if cfg.Server.Insecure {
@@ -161,25 +122,38 @@ func main() {
 		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
-	// create a new SweetTooth client
+	// create a new SweetTooth client instance
 	cli := client.NewSweetToothClient(cfg.Server.Url)
 
-	// just keep checking in forever every 15 seconds
+	// just keep checking in forever every checkin period regardless of what the result is, updates last_seen in the database
 	go func() {
 		for {
 			func() {
-				defer recoverable(true)
+				defer util.Recoverable(true)
 				err := cli.Check()
-				log.Debug().Err(err).Msg("background check in")
+				// only output on Trace debug level
+				log.Trace().Err(err).Msg("background check in")
 			}()
-			time.Sleep(time.Second * 15)
+			time.Sleep(DEFAULT_PERIOD_CHECKIN)
 		}
 	}()
 
+	log.Debug().Msg("entering client logic loop.")
+
 	for {
 		if !loopRecoverable(cli) {
+			// a panic is by definition unexpected behavior
 			log.Info().Msg("Recovered from an error. Re-starting application loop.")
+
+			// reset the registration status
+			cli.Registered = false
+			tracker.Reset()
+
+			// sleep for a short time before re-starting
+			time.Sleep(DEFAULT_PERIOD_RECOVER)
+			continue
 		}
-		time.Sleep(5 * time.Second)
+		// client loop completed successfully, wait some time for the next loop
+		time.Sleep(DEFAULT_PERIOD_LOOP)
 	}
 }

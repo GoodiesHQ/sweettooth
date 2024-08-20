@@ -19,6 +19,7 @@ func CreateErr(status int, defaultMessage string) func(http.ResponseWriter, *htt
 	}
 }
 
+var ErrRegistrationTokenInvalid = CreateErr(http.StatusUnauthorized, "the registration token is not found or expired")
 var ErrNodeTokenInvalid = CreateErr(http.StatusUnauthorized, "the token is invalid or exired")
 var ErrNodeUnauthorized = CreateErr(http.StatusUnauthorized, "the token is not authorized")
 var ErrNodeNotApproved = CreateErr(http.StatusForbidden, "the node is not approved")
@@ -27,3 +28,6 @@ var ErrOrgNotFound = CreateErr(http.StatusNotFound, "the organization is not fou
 var ErrInvalidRequestBody = CreateErr(http.StatusBadRequest, "invalid request payload")
 var ErrServiceUnavailable = CreateErr(http.StatusServiceUnavailable, "service unavailable")
 var ErrServerError = CreateErr(http.StatusInternalServerError, "internal server error")
+var ErrInvalidJobID = CreateErr(http.StatusUnprocessableEntity, "the job ID provided is invalid")
+var ErrJobMissingOrExpired = CreateErr(http.StatusNotFound, "this job ID is missing, expired, deleted, or has reached the attempt limit.")
+var ErrJobAlreadyCompleted = CreateErr(http.StatusConflict, "this job ID has already been completed")

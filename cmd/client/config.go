@@ -21,7 +21,7 @@ type Config struct {
 		Insecure bool   `yaml:"insecure,omitempty"`
 	} `yaml:"server"`
 	Logging struct {
-		level string `yaml:"level"`
+		Level string `yaml:"level"`
 	} `yaml:"logging"`
 }
 
@@ -75,7 +75,7 @@ func loadConf() (*Config, error) {
 		// ... then create a default config which will be used on future executions
 		var cfg Config
 		cfg.Server.Url = url
-		cfg.Logging.level = CONFIG_DEFAULT_LOGLEVEL
+		cfg.Logging.Level = CONFIG_DEFAULT_LOGLEVEL
 		if err := cfg.Save(fname); err != nil {
 			return nil, err
 		}

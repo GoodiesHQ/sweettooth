@@ -1,11 +1,9 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/goodieshq/sweettooth/pkg/crypto"
 	"github.com/goodieshq/sweettooth/pkg/util"
 )
@@ -24,25 +22,6 @@ func extractAuthToken(r *http.Request) string {
 	}
 
 	return parts[1]
-}
-
-// extract the target claim from the token's claims and cast to type T
-func extractClaim[T any](claims jwt.MapClaims, name string) (T, error) {
-	var zero T
-
-	// check if the claim exists first
-	key, found := claims[name]
-	if !found {
-		return zero, fmt.Errorf("claim '%s' not found", name)
-	}
-
-	// convert the value to type T if possible
-	val, ok := key.(T)
-	if !ok {
-		return zero, fmt.Errorf("unexpected type for claim '%s'", name)
-	}
-
-	return val, nil
 }
 
 // Middleware for handling endpoints which are exclusively used by nodes running sweettooth clients

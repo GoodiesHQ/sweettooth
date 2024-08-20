@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/rs/zerolog/log"
 )
@@ -18,25 +19,6 @@ const (
 	PKG_ACTION_UPGRADE   PkgAction = 2
 	PKG_ACTION_UNINSTALL PkgAction = 3
 )
-
-type PackageParams struct {
-	Action           PkgAction // (required) install, uninstall, upgrade
-	Name             string    // (required) name of the chocolatey package
-	Version          string    // (optional) target version to install or upgrade to
-	IgnoreChecksum   bool      // (optional) ignore the checksum validation
-	InstallOnUpgrade bool      // true = install during upgrade job if not installed, false = skip
-	Force            bool      // Force the behavior
-	Verbose          bool      // verbose output
-	NotSilent        bool      // enable to prevent silent installations
-}
-
-type PackageResult struct {
-	Params   PackageParams
-	Err      error
-	Status   ChocoStatus
-	Output   string
-	ExitCode int
-}
 
 func pkgactionName(action PkgAction) string {
 	switch action {
@@ -87,7 +69,11 @@ func getListAllInstalledPart(part string) (util.SoftwareList, partType) {
 }
 
 func ListAllInstalled() (util.SoftwareList, util.SoftwareList, error) {
+	log.Trace().Msg("choco.ListChocoOutdated called")
+	log.Debug().Str("cmd", "choco list --include-programs").Msg("running command")
+
 	cmd := exec.Command("choco", "list", "--include-programs")
+
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, nil, err
@@ -132,32 +118,45 @@ func ListAllInstalled() (util.SoftwareList, util.SoftwareList, error) {
 	return pkgChoco, pkgSystem, nil
 }
 
-func ListChocoOutdated() ([]util.SoftwareOutdated, error) {
-	// choco list -r
+func ListChocoOutdated() (util.SoftwareOutdatedList, error) {
+	log.Trace().Msg("choco.ListChocoOutdated called")
+	log.Debug().Str("cmd", "choco outdated -r").Msg("running command")
+
 	cmd := exec.Command("choco", "outdated", "-r")
 
-	output, err := cmd.CombinedOutput()
+	// get the stdout output
+	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	var packages []util.SoftwareOutdated
+	var packages = []util.SoftwareOutdated{}
+
 	lines := strings.Split(string(output), "\n")
 
-	for i, line := range lines {
-		lines[i] = strings.TrimSpace(line)
-	}
-
 	for _, line := range lines {
+		// trim any remaining whitespace
+		line = strings.TrimSpace(line)
+
+		// ignore blank lines
 		if line == "" {
 			continue
 		}
+
+		// parse the pipe-delimited output
 		parts := strings.Split(line, "|")
-		pinned, err := strconv.ParseBool(parts[3])
-		if err != nil {
+		if len(parts) != 4 {
+			log.Warn().Str("line", line).Msg("failed to split line by '|'")
 			continue
 		}
 
+		pinned, err := strconv.ParseBool(parts[3])
+		if err != nil {
+			log.Warn().Str("line", line).Msg("boolean value is invalid")
+			continue
+		}
+
+		// add the package described in the line to the list
 		packages = append(packages, util.SoftwareOutdated{
 			Name:       parts[0],
 			VersionOld: parts[1],
@@ -170,7 +169,9 @@ func ListChocoOutdated() ([]util.SoftwareOutdated, error) {
 }
 
 func ListChocoInstalled() ([]util.Software, error) {
-	// choco list -r
+	log.Trace().Msg("choco.ListChocoInstalled called")
+	log.Debug().Str("cmd", "choco list -r").Msg("running command")
+
 	cmd := exec.Command("choco", "list", "-r")
 
 	output, err := cmd.CombinedOutput()
@@ -178,7 +179,7 @@ func ListChocoInstalled() ([]util.Software, error) {
 		return nil, err
 	}
 
-	var packages []util.Software
+	var packages = []util.Software{}
 	lines := strings.Split(string(output), "\n")
 
 	for i, line := range lines {
@@ -189,7 +190,13 @@ func ListChocoInstalled() ([]util.Software, error) {
 		if line == "" {
 			continue
 		}
+		// parse the pipe-delimited output
 		parts := strings.Split(line, "|")
+		if len(parts) != 2 {
+			log.Warn().Str("line", line).Msg("failed to split line by '|'")
+			continue
+		}
+
 		packages = append(packages, util.Software{
 			Name:    parts[0],
 			Version: parts[1],
@@ -199,58 +206,67 @@ func ListChocoInstalled() ([]util.Software, error) {
 	return packages, nil
 }
 
-func Package(params *PackageParams) *PackageResult {
-	var result = &PackageResult{Params: *params}
+func Package(action PkgAction, params *api.PackageJobParameters) *api.PackageJobResult {
+	log.Trace().Msg("choco.Package called")
+
+	var result = &api.PackageJobResult{}
 	var err error
 
-	var args = []string{pkgactionName(params.Action), params.Name, "-y"}
+	var args = []string{pkgactionName(action), params.Name, "-y"}
 
 	// Add on optional arguments based on the InstallParams provided
 
-	if params.Verbose {
+	// enable verbose output
+	if params.VerboseOutput {
 		args = append(args, "--verbose")
 	}
 
+	// force the command, use sparingly
 	if params.Force {
 		args = append(args, "--force")
 	}
 
-	if (params.Action == PKG_ACTION_INSTALL || params.Action == PKG_ACTION_UPGRADE) && params.Version != "" {
-		args = append(args, "--version", params.Version)
+	// specify the version of a package on install/upgrade
+	if (action == PKG_ACTION_INSTALL || action == PKG_ACTION_UPGRADE) && params.Version != nil && *params.Version != "" {
+		args = append(args, "--version", *params.Version)
 	}
 
+	// ignore checksum, use sparingly
 	if params.IgnoreChecksum {
 		args = append(args, "--ignore-checksums")
 	}
 
-	if (params.Action == PKG_ACTION_UPGRADE) && !params.InstallOnUpgrade {
+	// by default, upgrade does not install if missing
+	if (action == PKG_ACTION_UPGRADE) && !params.InstallOnUpgrade {
 		args = append(args, "--fail-on-not-installed")
 	}
 
 	// Run the command
+	log.Debug().Str("cmd", "choco "+strings.Join(args, " ")).Msg("running command")
 	cmd := exec.Command("choco", args...)
-	log.Info().Str("command", strings.Join(cmd.Args, " ")).Send()
 
 	// retrieve the stdout and stderr output
 	output, err := cmd.CombinedOutput()
 	log.Info().Msgf("Output is %d bytes", len(output))
 
-	result.Status = StatusCheck(output)
+	// set the result
 	result.Output = string(output)
+	result.Status = int(StatusCheck(output))
 
 	if exitError, ok := err.(*exec.ExitError); ok {
 		// The program has exited with a non-zero status
-		code := exitError.ExitCode()
-		result.ExitCode = code
-		result.Err = err
+		result.ExitCode = exitError.ExitCode()
+		err := err.Error()
+		result.Error = &err
 	} else if err != nil {
 		// There was an error running the command
-		result.Err = err
 		result.ExitCode = -1
+		err := err.Error()
+		result.Error = &err
 	} else {
 		// The program has exited with a zero status
 		result.ExitCode = 0
-		result.Err = nil
+		result.Error = nil
 	}
 
 	return result

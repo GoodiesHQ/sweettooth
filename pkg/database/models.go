@@ -31,7 +31,7 @@ type GroupSourceAssignment struct {
 
 type Node struct {
 	ID                uuid.UUID                 `db:"id" json:"id"`
-	OrganizationID    pgtype.UUID               `db:"organization_id" json:"organization_id"`
+	OrganizationID    uuid.UUID                 `db:"organization_id" json:"organization_id"`
 	PublicKey         string                    `db:"public_key" json:"public_key"`
 	Label             pgtype.Text               `db:"label" json:"label"`
 	Hostname          string                    `db:"hostname" json:"hostname"`
@@ -97,10 +97,11 @@ type OrganizationSourceAssignment struct {
 }
 
 type PackageJob struct {
-	ID               int64            `db:"id" json:"id"`
+	ID               uuid.UUID        `db:"id" json:"id"`
 	NodeID           uuid.UUID        `db:"node_id" json:"node_id"`
 	GroupID          pgtype.UUID      `db:"group_id" json:"group_id"`
 	OrganizationID   uuid.UUID        `db:"organization_id" json:"organization_id"`
+	Attempts         int32            `db:"attempts" json:"attempts"`
 	Action           int32            `db:"action" json:"action"`
 	Name             string           `db:"name" json:"name"`
 	Version          pgtype.Text      `db:"version" json:"version"`
@@ -109,10 +110,22 @@ type PackageJob struct {
 	Force            bool             `db:"force" json:"force"`
 	VerboseOutput    bool             `db:"verbose_output" json:"verbose_output"`
 	NotSilent        bool             `db:"not_silent" json:"not_silent"`
-	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
-	CompletedAt      pgtype.Timestamp `db:"completed_at" json:"completed_at"`
-	Status           pgtype.Int4      `db:"status" json:"status"`
+	Status           int32            `db:"status" json:"status"`
+	ExitCode         pgtype.Int4      `db:"exit_code" json:"exit_code"`
 	Output           pgtype.Text      `db:"output" json:"output"`
+	Error            pgtype.Text      `db:"error" json:"error"`
+	AttemptedAt      pgtype.Timestamp `db:"attempted_at" json:"attempted_at"`
+	CompletedAt      pgtype.Timestamp `db:"completed_at" json:"completed_at"`
+	ExpiresAt        pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type RegistrationToken struct {
+	ID             uuid.UUID        `db:"id" json:"id"`
+	OrganizationID uuid.UUID        `db:"organization_id" json:"organization_id"`
+	Name           string           `db:"name" json:"name"`
+	CreatedAt      pgtype.Timestamp `db:"created_at" json:"created_at"`
+	ExpiresAt      pgtype.Timestamp `db:"expires_at" json:"expires_at"`
 }
 
 type Schedule struct {

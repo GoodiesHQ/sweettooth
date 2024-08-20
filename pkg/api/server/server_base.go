@@ -52,8 +52,8 @@ func (srv *SweetToothServer) Run() error {
 
 	// base middleware for all endpoints
 	mwgBase := MiddlewareGroup{}
-	mwgBase.Add(MiddlewareLogger) // simple request logging
-	mwgBase.Add(MiddlewarePanic)  // recover from and log panics
+	mwgBase.Add(MiddlewareLogger) // simple request and error logging
+	mwgBase.Add(MiddlewarePanic)  // recover from and log panics (technically if a panic occurs in the logger it could still crash)
 	mwgBase.Add(MiddlewareJSON)   // all responses should be JSON
 
 	// middleware for all node interaction endpoints
@@ -68,26 +68,37 @@ func (srv *SweetToothServer) Run() error {
 	// basic index page, TODO: host static application
 	router.Handle("GET /", mwgBase.Apply(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		JsonErr(w, r, http.StatusNotImplemented, errors.New("this endpoint is not implemented"))
-		return
+		// return
 		// JsonResponse(w, r, http.StatusServiceUnavailable, map[string]interface{}{"status": "success", "a": 123})
 	})))
 
-	// implement endpoints
+	/*
+	 * implement endpoint handlers
+	 */
 
 	// temporary, just here to let me clear the cache during development
 	router.Handle("DELETE /api/v1/cache", mwgBase.ApplyFunc(srv.handleDeleteCache)) // temporary function to easily clear the cache
 
-	// unauthenticated endpoint (though does require a valid signature).
-	router.Handle("POST /api/v1/node/register", mwgBase.ApplyFunc(srv.handlePostNodeRegister)) // register and onboard a new node, unauthenticated but valid signature required
-
 	// the simplest API endpoint: returns 204 on success. Use it to verify JWT auth.
 	router.Handle("GET /api/v1/node/check", mwgNode.ApplyFunc(srv.handleGetNodeCheck)) // simple status check to determine registration/approval status
+
+	// unauthenticated endpoint (though does require a valid signature).
+	router.Handle("POST /api/v1/node/register", mwgBase.ApplyFunc(srv.handlePostNodeRegister)) // register and onboard a new node, unauthenticated but valid signature required
 
 	// node should acquire a single array of all schedule entries that apply to it (assigned to node, group, etc...)
 	router.Handle("GET /api/v1/node/schedule", mwgNode.ApplyFunc(srv.handleGetNodeSchedule)) // acquire the combined schedule entries for this node
 
-	// node should update the server's inventory of its packages
+	// node can query or update the server's inventory of its packages
+	router.Handle("GET /api/v1/node/packages", mwgNode.ApplyFunc(srv.handleGetNodePackages))
 	router.Handle("PUT /api/v1/node/packages", mwgNode.ApplyFunc(srv.handlePutNodePackages))
+
+	// list package jobs
+	router.Handle("GET /api/v1/node/packages/jobs", mwgNode.ApplyFunc(srv.handleGetNodePackagesJobs))
+	router.Handle("GET /api/v1/node/packages/jobs/{$}", mwgNode.ApplyFunc(srv.handleGetNodePackagesJobs))
+
+	// get details of a specific job (counts as an attempt as the details should only be acquired when ready to )
+	router.Handle("GET /api/v1/node/packages/jobs/{id}", mwgNode.ApplyFunc(srv.handleGetNodePackagesJob))
+	router.Handle("POST /api/v1/node/packages/jobs/{id}", mwgNode.ApplyFunc(srv.handlePostNodePackagesJob))
 
 	// router should listen on the configured host/port
 	listenStr := fmt.Sprintf("%s:%d", srv.config.Host, srv.config.Port)

@@ -42,6 +42,7 @@ func initLoggingFile(filename string) {
 func setLogLevel(levelName string) {
 	level, err := zerolog.ParseLevel(levelName)
 	if err != nil || level == zerolog.NoLevel {
+		log.Warn().Msgf("config log level '%s' is invalid, using default '%s'", levelName, CONFIG_DEFAULT_LOGLEVEL)
 		level, _ = zerolog.ParseLevel(CONFIG_DEFAULT_LOGLEVEL)
 	}
 	log.Logger = log.Logger.Level(level)

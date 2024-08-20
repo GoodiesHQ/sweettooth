@@ -5,28 +5,33 @@ import (
 
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
-	"github.com/goodieshq/sweettooth/pkg/choco"
 	"github.com/goodieshq/sweettooth/pkg/crypto"
 	"github.com/goodieshq/sweettooth/pkg/system"
+	"github.com/goodieshq/sweettooth/pkg/tracker"
 	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // ensure the node is registered with the server
-func register(cli *client.SweetToothClient) bool {
+func doRegister(cli *client.SweetToothClient) bool {
+	log.Trace().Str("routine", "doRegister").Msg("called")
+	defer log.Trace().Str("routine", "doRegister").Msg("finished")
+
 	// perform an initial check for the current status and determine if a registration is required
-	if !cli.Registered { // assume it is not registered by default, subsequent calls to loop will skip this
+	if !cli.Registered {
+		log.Debug().Msg("running a check to determine registration status")
 		err := cli.Check()
 		switch err {
 		case nil:
 			cli.Registered = true
-			log.Info().Msg("node is registered and approved")
+			log.Info().Msg("Node Status: ✅ registered, approved")
 		case client.ErrNodeNotApproved:
 			cli.Registered = true
-			log.Warn().Msg("node is registered, but not yet approved")
+			log.Warn().Msg("Node Status: ⛔ registered, not yet approved")
 		case client.ErrNodeNotRegistered:
 			cli.Registered = false
-			log.Warn().Msg("node has not yet been registered")
+			log.Warn().Msg("Node Status: ⚠️ not yet registered")
 		default:
 			cli.Registered = false
 			if !client.LogIfApiErr(err) {
@@ -36,15 +41,18 @@ func register(cli *client.SweetToothClient) bool {
 	}
 
 	if !cli.Registered {
-		var registration api.RegistrationRequest
+		log.Trace().Msg("generating registration request")
 
+		log.Trace().Msg("gathering system information")
+		var registration api.RegistrationRequest
 		info, err := system.GetSystemInfo()
 		if err != nil {
 			log.Error().Err(err).Send()
 			return false
 		}
 
-		pkgChoco, pkgSystem, err := choco.ListAllInstalled()
+		log.Trace().Msg("gathering software information")
+		pkg, _, err := tracker.Track()
 		if err != nil {
 			log.Error().Err(err).Send()
 			return false
@@ -52,7 +60,7 @@ func register(cli *client.SweetToothClient) bool {
 
 		// set the node registration information
 		registration.Hostname = info.Hostname
-		registration.OrganizationID = nil
+		registration.Token = uuid.MustParse("89e07b4e-3943-4ee1-8f06-e63b65892289")
 		// registration.OrganizationID = organization_id
 		registration.ClientVersion = util.VERSION
 		registration.PublicKey = crypto.GetPublicKeyBase64()
@@ -63,8 +71,9 @@ func register(cli *client.SweetToothClient) bool {
 		registration.OSMajor = info.OSInfo.Major
 		registration.OSMinor = info.OSInfo.Minor
 		registration.OSBuild = info.OSInfo.Build
-		registration.PackagesChoco = pkgChoco
-		registration.PackagesSystem = pkgSystem
+		registration.PackagesChoco = pkg.PackagesChoco
+		registration.PackagesSystem = pkg.PackagesSystem
+		registration.PackagesOutdated = pkg.PackagesOutdated
 
 		code, err := cli.Register(&registration)
 		if err != nil {
@@ -77,11 +86,11 @@ func register(cli *client.SweetToothClient) bool {
 		case http.StatusNoContent:
 			fallthrough
 		case http.StatusOK:
-			log.Info().Msg("client was previously registered")
-		case http.StatusNotFound:
-			log.Info().Msg("organization ID was not found")
+			log.Info().Msg("client was already registered")
 		case http.StatusForbidden:
 			log.Warn().Msg("client is registered but not yet approved")
+		case http.StatusUnauthorized:
+			log.Panic().Msg("registration token is not authorized")
 		default:
 			log.Panic().Int("status_code", code).Str("status", http.StatusText(code)).Err(err).Msg("unexpected status code")
 		}

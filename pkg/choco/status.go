@@ -101,6 +101,6 @@ func StatusCheck(output []byte) (status ChocoStatus) {
 		}
 	}
 
-	log.Debug().Int("status", int(status)).Str("message", StatusMessage(status)).Send()
+	log.Trace().Int("status", int(status)).Str("message", StatusMessage(status)).Msg("choco output analyzed")
 	return
 }
