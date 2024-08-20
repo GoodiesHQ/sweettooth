@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    env_file:
+      - ./postgres-dev.env
+    ports:
+      - 15432:5432
+    volumes:
+      - postgres:/data/postgres
+      - ../sql/schema.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  pgadmin:
+    container_name: demo_pgadmin
+    labels:
+      org.springframework.boot.ignore: true
+    image: "dpage/pgadmin4:latest"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    volumes:
+       - pgadmin:/var/lib/pgadmin
+       - ./docker_pgadmin_servers.json:/pgadmin4/servers.json
+    ports:
+      - 8888:80
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+      - "/bin/echo 'db:5432:*:postgres:password' > /tmp/pgpassfile && chmod 600 /tmp/pgpassfile && /entrypoint.sh"
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  pgadmin:
