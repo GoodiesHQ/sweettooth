@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/goodieshq/sweettooth/pkg/schedule"
-	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/goodieshq/sweettooth/internal/schedule"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/google/uuid"
 )
 
@@ -84,6 +84,7 @@ type Packages struct {
 type PackageJobParameters struct {
 	Name             string  `json:"name"`               // target package name
 	Version          *string `json:"string,omitempty"`   // target package version (optional)
+	Timeout          int     `json:"timeout"`            // timeout for the command (sans grace period)
 	IgnoreChecksum   bool    `json:"ignore_checksum"`    // ignore package checksum
 	InstallOnUpgrade bool    `json:"install_on_upgrade"` // install if missing (upgrade action only)
 	Force            bool    `json:"force"`              // force the action

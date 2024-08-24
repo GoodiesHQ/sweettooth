@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/rs/zerolog/log"
 )
 

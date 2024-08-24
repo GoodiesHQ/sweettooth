@@ -8,7 +8,7 @@ package database
 import (
 	"context"
 
-	"github.com/goodieshq/sweettooth/pkg/schedule"
+	"github.com/goodieshq/sweettooth/internal/schedule"
 	"github.com/google/uuid"
 )
 

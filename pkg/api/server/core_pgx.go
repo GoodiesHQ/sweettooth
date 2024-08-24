@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/goodieshq/sweettooth/internal/crypto"
+	"github.com/goodieshq/sweettooth/internal/database"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/crypto"
-	"github.com/goodieshq/sweettooth/pkg/database"
-	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"

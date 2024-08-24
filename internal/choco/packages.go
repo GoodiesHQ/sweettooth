@@ -2,13 +2,16 @@ package choco
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,6 +21,8 @@ const (
 	PKG_ACTION_INSTALL   PkgAction = 1
 	PKG_ACTION_UPGRADE   PkgAction = 2
 	PKG_ACTION_UNINSTALL PkgAction = 3
+
+	PKG_DEFAULT_TIMEOUT = 600
 )
 
 func pkgactionName(action PkgAction) string {
@@ -241,13 +246,30 @@ func Package(action PkgAction, params *api.PackageJobParameters) *api.PackageJob
 		args = append(args, "--fail-on-not-installed")
 	}
 
+	if params.Timeout == 0 {
+		params.Timeout = PKG_DEFAULT_TIMEOUT
+	}
+	args = append(args, fmt.Sprintf("--timeout %d", params.Timeout))
+
 	// Run the command
 	log.Debug().Str("cmd", "choco "+strings.Join(args, " ")).Msg("running command")
-	cmd := exec.Command("choco", args...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*(time.Duration(params.Timeout+30))) // add 30s to the context
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "choco", args...)
+	// cmd := exec.Command("choco", args...)
 
 	// retrieve the stdout and stderr output
 	output, err := cmd.CombinedOutput()
-	log.Info().Msgf("Output is %d bytes", len(output))
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			err = errors.New("the choco job timed out during execution")
+		}
+		log.Error().Err(err).Msg("failed to get choco output")
+	} else {
+		log.Info().Msgf("Output is %d bytes", len(output))
+	}
 
 	// set the result
 	result.Output = string(output)

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/util"
 )
 
 func JsonErr(w http.ResponseWriter, r *http.Request, status int, err error) {

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/goodieshq/sweettooth/pkg/crypto"
-	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/goodieshq/sweettooth/internal/crypto"
+	"github.com/goodieshq/sweettooth/internal/util"
 )
 
 // Extract the bearer token from the Authorization header

@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/goodieshq/sweettooth/internal/choco"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/choco"
 	"github.com/rs/zerolog/log"
 )
 

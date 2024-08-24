@@ -7,9 +7,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/goodieshq/sweettooth/internal/crypto"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/crypto"
-	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/google/uuid"
 )
 

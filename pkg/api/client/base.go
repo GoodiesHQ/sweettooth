@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/goodieshq/sweettooth/internal/crypto"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/crypto"
 	"github.com/rs/zerolog/log"
 )
 

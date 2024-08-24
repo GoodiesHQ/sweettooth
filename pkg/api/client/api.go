@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/goodieshq/sweettooth/internal/schedule"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/goodieshq/sweettooth/pkg/schedule"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )

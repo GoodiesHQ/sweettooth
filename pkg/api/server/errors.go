@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/goodieshq/sweettooth/internal/util"
 )
 
 // the default messages are always sent as a response, but custom errors will show up in the logs instead
