@@ -12,10 +12,19 @@ import (
 var ServiceConfig = &service.Config{
 	Name:        strings.ToLower(config.APP_NAME),
 	DisplayName: config.APP_NAME + " v" + util.VERSION,
-	Description: config.APP_NAME + " is a centrally managed application developed by " +
-		"Austin Archer to monitor, report on, and manage 3rd party software at scale.",
+	Description: "Centrally managed application by " +
+		"Datalink Networks to manage and monitor 3rd party software at scale.",
 	Executable: config.BinFile(),
 	Arguments:  []string{"run"},
+	Option: service.KeyValue{
+		"Restart":                "always",        // restart always
+		"SuccessExitCode":        0,               // consider exit code 0 as a successful exit
+		"LogDirectory":           config.LogDir(), // sweettooth log directory
+		"StartType":              "automatic",     // start up the service with the system
+		"OnFailure":              "restart",       // restart the service if it ever panics/fails
+		"OnFailureDelayDuration": "5s",            // sleep for 5s after failure
+		"OnFailureResetPeriod":   10,              // sleep for 10s before reset
+	},
 }
 
 type SweetToothProgram struct {

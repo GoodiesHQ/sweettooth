@@ -119,6 +119,10 @@ func Cache() string {
 	return configPath("cache.json")
 }
 
+func LogDir() string {
+	return dirLogs()
+}
+
 func LogFile() string {
 	return path.Join(dirLogs(), strings.ToLower(APP_NAME)+".log")
 }
