@@ -1,22 +1,22 @@
-package main
+package engine
 
 import (
-	"github.com/goodieshq/sweettooth/pkg/api/client"
-	"github.com/goodieshq/sweettooth/pkg/choco"
+	"github.com/goodieshq/sweettooth/internal/choco"
+	"github.com/goodieshq/sweettooth/internal/crypto"
+	"github.com/goodieshq/sweettooth/internal/crypto/dpapi"
+	"github.com/goodieshq/sweettooth/internal/schedule"
+	"github.com/goodieshq/sweettooth/internal/tracker"
 	"github.com/goodieshq/sweettooth/pkg/config"
-	"github.com/goodieshq/sweettooth/pkg/crypto"
-	"github.com/goodieshq/sweettooth/pkg/crypto/dpapi"
-	"github.com/goodieshq/sweettooth/pkg/schedule"
-	"github.com/goodieshq/sweettooth/pkg/tracker"
 	"github.com/rs/zerolog/log"
 )
 
-var isBootstrapped = false
-
 // returns true if all bootstrap procedures succeed, panics otherwise.
-func bootstrap(cli *client.SweetToothClient) bool {
-	if isBootstrapped {
-		return true
+func (engine *SweetToothEngine) Bootstrap() {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+
+	if engine.bootstrapped {
+		return
 	}
 
 	// initialize the crypto module by generating new keys or loading existing keys from disk
@@ -43,13 +43,12 @@ func bootstrap(cli *client.SweetToothClient) bool {
 	}
 	log.Info().Msg("✅ Bootstrapped software tracker")
 
-	// once initialized, the node ID should be permanent
-	setLogKey("nodeid", cli.NodeID())
-
 	log.Info().
 		Str("public_key", crypto.GetPublicKeyBase64()).
 		Msgf("Initialized " + config.APP_NAME + " Client")
 
-	isBootstrapped = true
-	return true
+	// once initialized, the node ID should be permanent
+	AddLogKey("nodeid", engine.client.NodeID())
+
+	engine.bootstrapped = true
 }

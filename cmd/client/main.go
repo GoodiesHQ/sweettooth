@@ -2,158 +2,179 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
 	"net/http"
-	"time"
 
+	"github.com/goodieshq/sweettooth/internal/engine"
+	"github.com/goodieshq/sweettooth/internal/system"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
 	"github.com/goodieshq/sweettooth/pkg/config"
-	"github.com/goodieshq/sweettooth/pkg/schedule"
-	"github.com/goodieshq/sweettooth/pkg/tracker"
-	"github.com/goodieshq/sweettooth/pkg/util"
+	"github.com/google/uuid"
+	"github.com/kardianos/service"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	// "github.com/rs/zerolog/log"
 )
 
-const (
-	DEFAULT_PERIOD_CHECKIN = time.Second * 60 // checkin period
-	DEFAULT_PERIOD_LOOP    = time.Second * 10 // loop every 30 seconds
-	DEFAULT_PERIOD_RECOVER = time.Second * 10 // recover after 30 seconds
-)
-
-func doWaitForCheck(cli *client.SweetToothClient) bool {
-	log.Trace().Str("routine", "doWaitForCheck").Msg("called")
-	defer log.Trace().Str("routine", "doWaitForCheck").Msg("finished")
-
-	for {
-		if err := cli.Check(); err == nil {
-			return true
-		} else if err == client.ErrNodeNotRegistered {
-			cli.Registered = false
-			log.Panic().Msg("node is no longer registered")
-		}
-		util.Countdown("Next check in attempt in ", 10, " seconds...")
-	}
-}
-
-func repeat(cli *client.SweetToothClient, fn func(cli *client.SweetToothClient) bool, warning string) func() bool {
-	var said bool
-	return func() bool {
-		for !fn(cli) {
-			if !said {
-				log.Warn().Msg(warning)
-				said = true
-			}
-		}
-		return true
-	}
-}
-
-// this is the main logic app
-func loop(cli *client.SweetToothClient) bool {
-	var msg string
-
-	// bootstrap the system if it hasn't already, otherwise silently continue
-	msg = "Failed to bootstrap the node. Retrying until success or panic..."
-	for !repeat(cli, bootstrap, msg)() {
-		util.Countdown("Re-trying bootstrap procedure in ", 5, "s...")
-	}
-
-	// register the client if it is not already registered, otherwise silently continue
-	msg = "Failed to register the node. Retrying until success or panic..."
-	for !repeat(cli, doRegister, msg)() {
-		util.Countdown("Re-trying registration procedure in ", 5, "s...")
-	}
-
-	// wait for the first successful check in (wait for an admin to approve the public key if necessary)
-	doWaitForCheck(cli)
-	log.Debug().Msg("successfully checked in!")
-
-	// TODO: update sources
-
-	// acquire the schedule for this node, just in case it has changed.
-	doSchedule(cli)
-
-	// check package jobs if it is currently in a maintenance schedule
-	if schedule.Now() || /* TODO: remove this*/ true {
-		doPackageJobs(cli)
-	}
-
-	// inventory local software and compare with server's inventory, update if needed
-	doTracker(cli)
-
-	return true
-}
-
-func loopRecoverable(cli *client.SweetToothClient) (successful bool) {
-	defer util.Recoverable(false)
-	loop(cli)
-	return true
+func usage() {
+	log.Fatal().
+		Str("install", "sweettooth.exe -url <server url> -token <registration token> [-insecure] [-loglevel (level)] install").
+		Str("uninstall", "sweeettooth.exe uninstall").
+		Str("run", "sweeettooth.exe run").
+		Msg("usage")
 }
 
 func main() {
-	// initialize the terminal logger for human-friendly output
-	initLoggingTerm()
+	/* these arguments are used for install only, but should be processed first, checked later */
+	serverurl := flag.String("url", "", "The Server URL for the SweetToooth server (e.g. \"https://sweettooth.example.com\")")
+	token := flag.String("token", "", "The token used to register the node with the server")
+	loglevel := flag.String("loglevel", zerolog.LevelInfoValue, "The logging level to use for sweettooth")
+	insecure := flag.Bool("insecure", false, "Disable HTTPS certificate verification (not recommended)")
+	notoken := flag.Bool("notoken", false, "This node does not require a token (not common)")
+	override := flag.Bool("override", false, "Copy the current executable to the sweettooth base directory even if it exists")
 
-	// display the obligatory banner
+	flag.Parse()
+	args := flag.Args()
+
+	// an obligatory old school banner :)
 	banner()
 
-	// initialize the configuration directory which stores the keys, schedule, and other information
-	if err := config.Bootstrap(); err != nil {
-		log.Panic().Err(err).Msg("Failed to bootstrap the local config directory")
+	// immediately initialize the terminal logger for human-friendly output
+	engine.LoggingBasic()
+
+	log.Info().Msg("Initializing " + config.APP_NAME + "...")
+
+	// expects at least one argument: run, install, uninstall, start, stop
+	if len(args) == 0 {
+		usage()
 	}
+
+	// initialize the configuration directory which stores the keys, logs, binary, config, etc
+	if err := config.Bootstrap(*override); err != nil {
+		log.Fatal().Err(err).Msg("failed to bootstrap the local config directory")
+	}
+
 	log.Info().Msg("✅ Bootstrapped config directory")
 
-	// load the configuration file (or create a default config)
-	log.Trace().Msg("Loading configuration file")
-	cfg, err := loadConf()
+	// invoking chocolatey to manage installations requires admin permissions
+	// it may be POSSIBLE to monitor software without admin permissions, but I thought it would be easier to just simply force it
+	if !system.IsAdmin() {
+		log.Fatal().Msg(config.APP_NAME + " must be run as administrator")
+	}
+	log.Trace().Msg(config.APP_NAME + " is running as administrator")
+
+	if args[0] == "install" {
+		// build a new configuration from cmd flags if installing
+		var cfg config.Configuration
+
+		if *serverurl == "" {
+			log.Fatal().Msg("a valid server URL must be provided")
+		}
+
+		cfg.Server.Url = *serverurl
+		cfg.Server.Insecure = *insecure
+		cfg.Logging.Level = *loglevel
+
+		// save the config from the flag parameters
+		cfg.Save(config.ClientConfig())
+	}
+
+	// load the configuration file
+	log.Trace().Msg("loading configuration file")
+	cfg, err := config.LoadConfigFile(config.ClientConfig())
 	if err != nil {
-		log.Panic().Err(err).Send()
+		log.Fatal().Err(err).Msg("failed to load the configuration file")
 	}
 
 	// set logfile output
-	initLoggingFile(config.LogFile())
+	log.Debug().Msg("enabling file logging...")
+	engine.LoggingFile(config.LogFile(), cfg.Logging.Level)
 
-	// set the level if provided, use info by default
-	setLogLevel(cfg.Logging.Level)
-
-	// if insecure is used, then ignore SSL errors with the URL (not recommended)
+	// if insecure is used, then ignore SSL errors with the URL (not recommended for production)
 	if cfg.Server.Insecure {
-		log.Warn().Msg("ignoring SSL errors with server")
+		log.Warn().Msg("ignoring SSL transport errors with server " + cfg.Server.Url)
 		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
-	// create a new SweetTooth client instance
+	// create a temporary client and engine
 	cli := client.NewSweetToothClient(cfg.Server.Url)
+	eng := engine.NewSweetToothEngine(cli)
 
-	// just keep checking in forever every checkin period regardless of what the result is, updates last_seen in the database
-	go func() {
-		for {
-			func() {
-				defer util.Recoverable(true)
-				err := cli.Check()
-				// only output on Trace debug level
-				log.Trace().Err(err).Msg("background check in")
-			}()
-			time.Sleep(DEFAULT_PERIOD_CHECKIN)
+	// create a new SweetTooth engine and client instance
+	log.Debug().Msg("bootstrapping the " + config.APP_NAME + " engine")
+	eng.Bootstrap()
+
+	prog := &SweetToothProgram{
+		engine: eng,
+	}
+
+	svc, err := service.New(prog, ServiceConfig)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to register the service")
+	}
+
+	switch args[0] {
+	case "status":
+		status, err := svc.Status()
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to check the service status")
 		}
-	}()
-
-	log.Debug().Msg("entering client logic loop.")
-
-	for {
-		if !loopRecoverable(cli) {
-			// a panic is by definition unexpected behavior
-			log.Info().Msg("Recovered from an error. Re-starting application loop.")
-
-			// reset the registration status
-			cli.Registered = false
-			tracker.Reset()
-
-			// sleep for a short time before re-starting
-			time.Sleep(DEFAULT_PERIOD_RECOVER)
-			continue
+		switch status {
+		case service.StatusRunning:
+			log.Info().Str("status", "running").Send()
+		case service.StatusStopped:
+			log.Info().Str("status", "stopped").Send()
+		case service.StatusUnknown:
+			log.Info().Str("status", "unknown").Send()
 		}
-		// client loop completed successfully, wait some time for the next loop
-		time.Sleep(DEFAULT_PERIOD_LOOP)
+	case "install":
+		/* bootstrap the system, install and run the service */
+		if *token == "" {
+			if !*notoken {
+				log.Fatal().Msg("a registration token should be provided. to ignore, use \"-notoken\"")
+			}
+			// -notoken provided, you better know what you're doing
+		} else {
+			tok, err := uuid.Parse(*token)
+			if err != nil {
+				log.Fatal().Err(err).Msg("invalid registration token provided")
+			}
+
+			if !eng.Register(tok) {
+				log.Fatal().Msg("failed to register with the server")
+			}
+
+			if err := svc.Install(); err != nil {
+				log.Fatal().Err(err).Msg("failed to install the service")
+			}
+			log.Info().Msg("installed service")
+			if err := svc.Start(); err != nil {
+				log.Fatal().Err(err).Msg("failed to start the service")
+			}
+			log.Info().Msg("started the service")
+		}
+	case "start":
+		if err := svc.Start(); err != nil {
+			log.Fatal().Err(err).Msg("failed to start the service")
+		}
+		log.Info().Msg("started the service")
+	case "stop":
+		if err := svc.Stop(); err != nil {
+			log.Fatal().Err(err).Msg("failed to stop the service")
+		}
+		log.Info().Msg("stopped the service")
+	case "uninstall":
+		if err := svc.Stop(); err != nil {
+			log.Fatal().Err(err).Msg("failed to stop the service")
+		}
+		log.Info().Msg("stopped the service")
+
+		if err := svc.Uninstall(); err != nil {
+			log.Fatal().Err(err).Msg("failed to uninstall the service")
+		}
+		log.Info().Msg("uninstalled the service")
+	case "run":
+		svc.Run()
+	default:
+		usage()
 	}
 }

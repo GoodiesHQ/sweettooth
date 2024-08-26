@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api/server"
-	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

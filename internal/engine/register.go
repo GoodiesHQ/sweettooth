@@ -1,46 +1,50 @@
-package main
+package engine
 
 import (
 	"net/http"
 
+	"github.com/goodieshq/sweettooth/internal/crypto"
+	"github.com/goodieshq/sweettooth/internal/system"
+	"github.com/goodieshq/sweettooth/internal/tracker"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
-	"github.com/goodieshq/sweettooth/pkg/crypto"
-	"github.com/goodieshq/sweettooth/pkg/system"
-	"github.com/goodieshq/sweettooth/pkg/tracker"
-	"github.com/goodieshq/sweettooth/pkg/util"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
-// ensure the node is registered with the server
-func doRegister(cli *client.SweetToothClient) bool {
-	log.Trace().Str("routine", "doRegister").Msg("called")
-	defer log.Trace().Str("routine", "doRegister").Msg("finished")
+// client routine to ensure the node is registered with the server
+func (engine *SweetToothEngine) Register(token uuid.UUID) bool {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+
+	log.Trace().Str("routine", "Register").Msg("called")
+	defer log.Trace().Str("routine", "Register").Msg("finished")
 
 	// perform an initial check for the current status and determine if a registration is required
-	if !cli.Registered {
+	if !engine.client.Registered {
 		log.Debug().Msg("running a check to determine registration status")
-		err := cli.Check()
+		err := engine.client.Check()
 		switch err {
 		case nil:
-			cli.Registered = true
+			engine.client.Registered = true
 			log.Info().Msg("Node Status: ✅ registered, approved")
 		case client.ErrNodeNotApproved:
-			cli.Registered = true
+			engine.client.Registered = true
 			log.Warn().Msg("Node Status: ⛔ registered, not yet approved")
 		case client.ErrNodeNotRegistered:
-			cli.Registered = false
+			engine.client.Registered = false
 			log.Warn().Msg("Node Status: ⚠️ not yet registered")
 		default:
-			cli.Registered = false
+			engine.client.Registered = false
 			if !client.LogIfApiErr(err) {
 				log.Error().Err(err).Msg("check failed")
 			}
 		}
 	}
 
-	if !cli.Registered {
+	// if it's still not registered
+	if !engine.client.Registered {
 		log.Trace().Msg("generating registration request")
 
 		log.Trace().Msg("gathering system information")
@@ -60,8 +64,7 @@ func doRegister(cli *client.SweetToothClient) bool {
 
 		// set the node registration information
 		registration.Hostname = info.Hostname
-		registration.Token = uuid.MustParse("89e07b4e-3943-4ee1-8f06-e63b65892289")
-		// registration.OrganizationID = organization_id
+		registration.Token = token
 		registration.ClientVersion = util.VERSION
 		registration.PublicKey = crypto.GetPublicKeyBase64()
 		registration.PublicKeySig = crypto.GetPublicKeySigBase64()
@@ -75,7 +78,7 @@ func doRegister(cli *client.SweetToothClient) bool {
 		registration.PackagesSystem = pkg.PackagesSystem
 		registration.PackagesOutdated = pkg.PackagesOutdated
 
-		code, err := cli.Register(&registration)
+		code, err := engine.client.Register(&registration)
 		if err != nil {
 			log.Panic().Err(err).Msg("failed to register the client")
 		}
@@ -95,10 +98,9 @@ func doRegister(cli *client.SweetToothClient) bool {
 			log.Panic().Int("status_code", code).Str("status", http.StatusText(code)).Err(err).Msg("unexpected status code")
 		}
 
-		cli.Registered = true
+		engine.client.Registered = true
 	}
 
 	// if a panic did not occur, then the registration was successful
-	return cli.Registered
-
+	return engine.client.Registered
 }

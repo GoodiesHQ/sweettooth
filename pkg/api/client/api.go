@@ -3,6 +3,7 @@ package client
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/goodieshq/sweettooth/internal/schedule"
 	"github.com/goodieshq/sweettooth/pkg/api"
@@ -13,19 +14,57 @@ import (
 type SweetToothClient struct {
 	ServerURL  string
 	Registered bool
+	run        func(*SweetToothClient)
+	mu         sync.RWMutex
+	stopch     chan bool
+}
+
+func (client *SweetToothClient) Stop() {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	if client.stopch != nil {
+		select {
+		case <-client.stopch: // stopch is already closed
+		default:
+			close(client.stopch)
+		}
+	}
+}
+
+func (client *SweetToothClient) Stopped() bool {
+	client.mu.RLock()
+	defer client.mu.RUnlock()
+
+	select {
+	case <-client.stopch:
+		return true
+	default:
+		return false
+	}
+}
+
+func (client *SweetToothClient) GetStopChan() (<-chan bool, func()) {
+	client.mu.RLock()
+	return client.stopch, func() { client.mu.RUnlock() }
+}
+
+func (client *SweetToothClient) Start() {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	client.stopch = make(chan bool, 1)
 }
 
 func NewSweetToothClient(serverUrl string) *SweetToothClient {
 	return &SweetToothClient{
 		ServerURL:  strings.Trim(serverUrl, "/"),
 		Registered: false,
+		stopch:     make(chan bool, 1),
 	}
 }
 
 func (client *SweetToothClient) Check() error {
-	/*if !client.Registered {
-		return ErrNodeNotRegistered
-	}*/
 	_, err := client.doRequest(&requestParams{
 		method:     http.MethodGet,
 		path:       "/api/v1/node/check",

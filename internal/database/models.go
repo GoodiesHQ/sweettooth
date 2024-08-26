@@ -110,6 +110,7 @@ type PackageJob struct {
 	Force            bool             `db:"force" json:"force"`
 	VerboseOutput    bool             `db:"verbose_output" json:"verbose_output"`
 	NotSilent        bool             `db:"not_silent" json:"not_silent"`
+	Timeout          int32            `db:"timeout" json:"timeout"`
 	Status           int32            `db:"status" json:"status"`
 	ExitCode         pgtype.Int4      `db:"exit_code" json:"exit_code"`
 	Output           pgtype.Text      `db:"output" json:"output"`

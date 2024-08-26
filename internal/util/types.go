@@ -1,6 +1,9 @@
 package util
 
-import "regexp"
+import (
+	"regexp"
+	"sync"
+)
 
 // Simple software application definition
 type Software struct {
@@ -35,3 +38,9 @@ type Repository struct {
 	SelfService bool   `json:"self_service"`
 	AdminOnly   bool   `json:"admin_only"`
 }
+
+
+type LogRWMutex struct {
+	mu sync.RWMutex
+}
+

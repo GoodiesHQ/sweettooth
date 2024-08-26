@@ -1,14 +1,15 @@
-package main
+package engine
 
 import (
+	"github.com/goodieshq/sweettooth/internal/tracker"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
-	"github.com/goodieshq/sweettooth/pkg/tracker"
 	"github.com/rs/zerolog/log"
 )
 
-func doTracker(cli *client.SweetToothClient) {
-	log.Trace().Str("routine", "doTracker").Msg("called")
-	defer log.Trace().Str("routine", "doTracker").Msg("finished")
+// client routine which invokes the software tracker and reports changes to the server
+func Tracker(cli *client.SweetToothClient) {
+	log.Trace().Str("routine", "Tracker").Msg("called")
+	defer log.Trace().Str("routine", "Tracker").Msg("finished")
 
 	log.Trace().Msg("doTracker called")
 

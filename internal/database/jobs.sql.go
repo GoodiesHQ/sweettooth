@@ -19,7 +19,7 @@ SET
     attempts = attempts + 1
 WHERE
     id = $1 AND node_id=$2 AND attempts < $3
-RETURNING id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
+RETURNING id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, timeout, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
 `
 
 type AttemptPackageJobParams struct {
@@ -45,6 +45,7 @@ func (q *Queries) AttemptPackageJob(ctx context.Context, arg AttemptPackageJobPa
 		&i.Force,
 		&i.VerboseOutput,
 		&i.NotSilent,
+		&i.Timeout,
 		&i.Status,
 		&i.ExitCode,
 		&i.Output,
@@ -68,7 +69,7 @@ SET
     completed_at=CURRENT_TIMESTAMP
 WHERE
     id=$1 AND status=0 AND node_id=$2
-RETURNING id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
+RETURNING id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, timeout, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
 `
 
 type CompletePackageJobParams struct {
@@ -104,6 +105,7 @@ func (q *Queries) CompletePackageJob(ctx context.Context, arg CompletePackageJob
 		&i.Force,
 		&i.VerboseOutput,
 		&i.NotSilent,
+		&i.Timeout,
 		&i.Status,
 		&i.ExitCode,
 		&i.Output,
@@ -143,7 +145,7 @@ VALUES
         $8, -- force
         $9 -- not_silent
     )
-RETURNING id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
+RETURNING id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, timeout, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
 `
 
 type CreatePackageJobParams struct {
@@ -185,6 +187,7 @@ func (q *Queries) CreatePackageJob(ctx context.Context, arg CreatePackageJobPara
 		&i.Force,
 		&i.VerboseOutput,
 		&i.NotSilent,
+		&i.Timeout,
 		&i.Status,
 		&i.ExitCode,
 		&i.Output,
@@ -199,7 +202,7 @@ func (q *Queries) CreatePackageJob(ctx context.Context, arg CreatePackageJobPara
 
 const getPackageJobByID = `-- name: GetPackageJobByID :one
 SELECT
-    id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
+    id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, timeout, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
 FROM
     package_jobs
 WHERE
@@ -224,6 +227,7 @@ func (q *Queries) GetPackageJobByID(ctx context.Context, id uuid.UUID) (PackageJ
 		&i.Force,
 		&i.VerboseOutput,
 		&i.NotSilent,
+		&i.Timeout,
 		&i.Status,
 		&i.ExitCode,
 		&i.Output,
@@ -273,7 +277,7 @@ func (q *Queries) GetPackageJobListByNodeID(ctx context.Context, arg GetPackageJ
 
 const getPackageJobsByNodeID = `-- name: GetPackageJobsByNodeID :many
 SELECT
-    id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
+    id, node_id, group_id, organization_id, attempts, action, name, version, ignore_checksum, install_on_upgrade, force, verbose_output, not_silent, timeout, status, exit_code, output, error, attempted_at, completed_at, expires_at, created_at
 FROM
     package_jobs
 WHERE
@@ -304,6 +308,7 @@ func (q *Queries) GetPackageJobsByNodeID(ctx context.Context, nodeID uuid.UUID) 
 			&i.Force,
 			&i.VerboseOutput,
 			&i.NotSilent,
+			&i.Timeout,
 			&i.Status,
 			&i.ExitCode,
 			&i.Output,
