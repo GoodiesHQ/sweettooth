@@ -1,6 +1,6 @@
 module github.com/goodieshq/sweettooth
 
-go 1.22.5
+go 1.23.0
 
 require (
 	github.com/billgraziano/dpapi v0.5.0
@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/kardianos/service v1.2.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rs/zerolog v1.33.0
