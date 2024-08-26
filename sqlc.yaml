@@ -5,7 +5,7 @@ sql:
     engine: "postgresql"
     gen:
       go:
-        out: "pkg/database"
+        out: "internal/database"
         package: "database"
         sql_package: "pgx/v5"
         emit_json_tags: true
@@ -19,29 +19,29 @@ sql:
             go_type: "bool"
           - column: "nodes.packages_choco"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/util"
+              import: "github.com/goodieshq/sweettooth/internal/util"
               type: "SoftwareList"
           - column: "nodes.packages_system"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/util"
+              import: "github.com/goodieshq/sweettooth/internal/util"
               type: "SoftwareList"
           - column: "nodes.packages_outdated"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/util"
+              import: "github.com/goodieshq/sweettooth/internal/util"
               type: "SoftwareOutdatedList"
           - column: "schedules.entries"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/schedule"
+              import: "github.com/goodieshq/sweettooth/internal/schedule"
               type: "Schedule"
           - column: "node_package_changelog.packages_choco"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/util"
+              import: "github.com/goodieshq/sweettooth/internal/util"
               type: "SoftwareList"
           - column: "node_package_changelog.packages_system"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/util"
+              import: "github.com/goodieshq/sweettooth/internal/util"
               type: "SoftwareList"
           - column: "node_package_changelog.packages_outdated"
             go_type: 
-              import: "github.com/goodieshq/sweettooth/pkg/util"
+              import: "github.com/goodieshq/sweettooth/internal/util"
               type: "SoftwareOutdatedList"

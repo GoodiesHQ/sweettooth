@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS package_jobs(
   force BOOLEAN NOT NULL DEFAULT FALSE,
   verbose_output BOOLEAN NOT NULL DEFAULT FALSE,
   not_silent BOOLEAN NOT NULL DEFAULT FALSE,
+  timeout INTEGER NOT NULL DEFAULT 600, -- default of 10 minutes to perform an install/uninstall, best to set the timeout per job
   -- RESULT:
   status INTEGER NOT NULL DEFAULT 0,
   exit_code INTEGER DEFAULT NULL,
