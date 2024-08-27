@@ -5,6 +5,7 @@ import (
 
 	"github.com/goodieshq/sweettooth/internal/engine"
 	"github.com/goodieshq/sweettooth/pkg/config"
+	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/kardianos/service"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -25,22 +26,36 @@ func main() {
 	loglevel := flag.String("loglevel", zerolog.LevelInfoValue, "The logging level to use for sweettooth")
 	insecure := flag.Bool("insecure", false, "Disable HTTPS certificate verification (not recommended)")
 	notoken := flag.Bool("notoken", false, "This node does not require a token (not common)")
+	nopath := flag.Bool("nopath", false, "Disables modifications to %PATH%")
 	override := flag.Bool("override", false, "Copy the current executable to the sweettooth base directory even if it exists")
+	q := flag.Bool("q", false, "Quiet")
 
 	flag.Parse()
 	args := flag.Args()
 
 	// an obligatory old school banner :)
-	banner()
+	if !*q {
+		banner()
+	}
 
 	// immediately initialize the terminal logger for human-friendly output
 	engine.LoggingBasic()
 
-	log.Info().Msg("Initializing " + config.APP_NAME + "...")
+	log.Info().Msg("Initializing " + info.APP_NAME + "...")
 
 	// expects at least one argument: run, install, uninstall, start, stop
 	if len(args) == 0 {
 		usage()
+	}
+
+	if args[0] == "update" {
+		updated, err := update(info.APP_NAME)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to update")
+		}
+		if updated {
+			return
+		}
 	}
 
 	// initialize the configuration directory which stores the keys, logs, binary, config, etc
@@ -66,7 +81,7 @@ func main() {
 	eng := engine.NewSweetToothEngine(cfg)
 
 	// create a new SweetTooth engine and client instance
-	log.Debug().Msg("bootstrapping the " + config.APP_NAME + " engine")
+	log.Debug().Msg("bootstrapping the " + info.APP_NAME + " engine")
 	eng.Bootstrap()
 
 	// create a startup service that should run when the system boots up
@@ -83,7 +98,7 @@ func main() {
 	case "status":
 		runStatus(svc)
 	case "install":
-		runInstall(svc, eng, *token, *notoken)
+		runInstall(svc, eng, *token, *notoken, *nopath)
 	case "start":
 		runStart(svc)
 	case "stop":

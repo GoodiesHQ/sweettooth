@@ -25,6 +25,7 @@ func parseSoftwareList(lines []string, delim string) util.SoftwareList {
 	return software
 }
 
+// extract the list of software from a `choco list --include-programs` part?
 func getListAllInstalledPart(part string) (util.SoftwareList, partType) {
 	lines := strings.Split(strings.TrimSpace(part), "\n")
 	if len(lines) > 0 {
@@ -39,7 +40,7 @@ func getListAllInstalledPart(part string) (util.SoftwareList, partType) {
 }
 
 func ListAllInstalled() (util.SoftwareList, util.SoftwareList, error) {
-	log.Trace().Msg("choco.ListChocoOutdated called")
+	log.Trace().Msg("choco.ListAllInstalled called")
 	log.Debug().Str("cmd", "choco list --include-programs").Msg("running command")
 
 	cmd := exec.Command("choco", "list", "--include-programs")

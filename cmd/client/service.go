@@ -6,14 +6,15 @@ import (
 	"github.com/goodieshq/sweettooth/internal/engine"
 	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/config"
+	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/google/uuid"
 	"github.com/kardianos/service"
 	"github.com/rs/zerolog/log"
 )
 
 var ServiceConfig = &service.Config{
-	Name:        strings.ToLower(config.APP_NAME),
-	DisplayName: config.APP_NAME + " v" + util.VERSION,
+	Name:        strings.ToLower(info.APP_NAME),
+	DisplayName: info.APP_NAME + " v" + util.VERSION,
 	Description: "Centrally managed application by " +
 		"Datalink Networks to manage and monitor 3rd party software at scale.",
 	Executable: config.BinFile(),
@@ -76,7 +77,7 @@ func runStatus(svc service.Service) {
 }
 
 // install the sweettooth service
-func runInstall(svc service.Service, eng *engine.SweetToothEngine, token string, notoken bool) {
+func runInstall(svc service.Service, eng *engine.SweetToothEngine, token string, notoken, nopath bool) {
 	if token == "" {
 		if !notoken {
 			log.Fatal().Msg("a registration token should be provided. to ignore, use \"-notoken\"")
@@ -101,16 +102,30 @@ func runInstall(svc service.Service, eng *engine.SweetToothEngine, token string,
 		}
 		log.Info().Msg("started the service")
 	}
+	if !nopath {
+		addPath() // add the sweettooth directory to the %PATH%
+	}
 }
 
 func runUninstall(svc service.Service) {
-	if err := svc.Stop(); err != nil {
-		log.Fatal().Err(err).Msg("failed to stop the service")
+	status, err := svc.Status()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get the service status while uninstalling")
+		// not necessarily fatal, but not sure when this would fail and uninstall would succeed
 	}
-	log.Info().Msg("stopped the service")
+
+	if status == service.StatusRunning {
+		if err := svc.Stop(); err != nil {
+			log.Fatal().Err(err).Msg("failed to stop the service")
+		}
+		log.Info().Msg("stopped the service")
+	}
 
 	if err := svc.Uninstall(); err != nil {
 		log.Fatal().Err(err).Msg("failed to uninstall the service")
 	}
-	log.Info().Msg("uninstalled the service")
+
+	delPath() // remove sweettooth from %PATH% even if -nopath is provided
+
+	log.Info().Msg("uninstalled the service and cleaned up the PATH")
 }

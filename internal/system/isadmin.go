@@ -23,7 +23,6 @@ func IsAdmin() bool {
 	var el elevation
 	var retLen uint32
 	err = windows.GetTokenInformation(token, windows.TokenElevation, (*byte)(unsafe.Pointer(&el)), uint32(unsafe.Sizeof(el)), &retLen)
-	// err = windows.GetTokenInformation(token, windows.TokenElevation, unsafe.Pointer(&el), uint32(unsafe.Sizeof(el)), &retLen)
 	if err != nil {
 		return false
 	}

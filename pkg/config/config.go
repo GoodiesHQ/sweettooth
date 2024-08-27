@@ -10,21 +10,21 @@ import (
 	"strings"
 
 	"github.com/goodieshq/sweettooth/internal/util"
+	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	APP_NAME         string = "SweetTooth"
 	DEFAULT_LOGLEVEL string = zerolog.LevelInfoValue
 )
 
 // create the base directory to store configs and cache
 func Bootstrap(override bool) error {
 	var err error
-	for _, p := range []string{dirBase(), dirLogs(), dirKeys()} {
-		err = os.MkdirAll(p, 0600)
+	for _, p := range []string{dirBase(), dirLogs(), dirKeys(), dirBin()} {
+		err = os.MkdirAll(p, 0600) // create all necessary directories
 		if err != nil {
 			return err
 		}
@@ -48,22 +48,25 @@ func Bootstrap(override bool) error {
 	}
 
 	if exePath == binPath {
+		// the current process is already the target binPath, no need
 		return nil
 	}
 
-	log.Warn().Msg(APP_NAME + " is not running from the target directory")
+	log.Warn().Msg(info.APP_NAME + " is not running from the target directory")
 
+	// check if the file exists
 	binExists := util.IsFile(binPath)
 	if !binExists {
-		log.Warn().Msg(APP_NAME + " missing from the target directory")
+		log.Warn().Msg(info.APP_NAME + " missing from the target directory")
 	}
 
+	// if it doesn't, or if -override is supplied, copy the file anyways
 	if override || !binExists {
 		err := util.CopyFile(exePath, binPath)
 		if err != nil {
 			return err
 		}
-		log.Info().Msg("copied the " + APP_NAME + " executable")
+		log.Info().Msg("copied the " + info.APP_NAME + " executable")
 	}
 
 	return nil
@@ -76,13 +79,13 @@ func dirBase() string {
 		programdata := os.Getenv("PROGRAMDATA")
 
 		if programdata == "" {
-			log.Warn().Msg("%PROGRAMDATA% not found, using C:/" + APP_NAME)
-			return path.Join("C:", APP_NAME)
+			log.Warn().Msg("%PROGRAMDATA% not found, using C:/" + info.APP_NAME)
+			return path.Join("C:", info.APP_NAME)
 		} else {
-			return path.Join(filepath.Clean(programdata), APP_NAME)
+			return path.Join(filepath.Clean(programdata), info.APP_NAME)
 		}
 	default:
-		return path.Join("/etc", APP_NAME)
+		return path.Join("/etc", info.APP_NAME)
 	}
 }
 
@@ -95,13 +98,17 @@ func dirKeys() string {
 	return configPath("keys")
 }
 
+func dirBin() string {
+	return configPath("bin")
+}
+
 // return the full configuration file path given a filename
 func configPath(names ...string) string {
 	return path.Join(append([]string{dirBase()}, names...)...)
 }
 
 func ClientConfig() string {
-	return configPath(strings.ToLower(APP_NAME) + ".yaml")
+	return configPath(strings.ToLower(info.APP_NAME) + ".yaml")
 }
 
 // client private key location
@@ -124,11 +131,11 @@ func LogDir() string {
 }
 
 func LogFile() string {
-	return path.Join(dirLogs(), strings.ToLower(APP_NAME)+".log")
+	return path.Join(dirLogs(), strings.ToLower(info.APP_NAME)+".log")
 }
 
 func BinFile() string {
-	return path.Join(dirBase(), strings.ToLower(APP_NAME)+".exe")
+	return path.Join(dirBin(), strings.ToLower(info.APP_NAME)+".exe")
 }
 
 type Configuration struct {

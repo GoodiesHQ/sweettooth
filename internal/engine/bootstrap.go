@@ -6,7 +6,7 @@ import (
 	"github.com/goodieshq/sweettooth/internal/crypto/dpapi"
 	"github.com/goodieshq/sweettooth/internal/schedule"
 	"github.com/goodieshq/sweettooth/internal/tracker"
-	"github.com/goodieshq/sweettooth/pkg/config"
+	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/rs/zerolog/log"
 )
 
@@ -45,7 +45,7 @@ func (engine *SweetToothEngine) Bootstrap() {
 
 	log.Info().
 		Str("public_key", crypto.GetPublicKeyBase64()).
-		Msgf("Initialized " + config.APP_NAME + " Client")
+		Msgf("Initialized " + info.APP_NAME + " Client")
 
 	// once initialized, the node ID should be permanent
 	AddLogKey("nodeid", engine.client.NodeID())

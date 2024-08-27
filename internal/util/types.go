@@ -39,8 +39,10 @@ type Repository struct {
 	AdminOnly   bool   `json:"admin_only"`
 }
 
-
 type LogRWMutex struct {
 	mu sync.RWMutex
 }
 
+func (lmu *LogRWMutex) foo() {
+	lmu.mu.Lock()
+}

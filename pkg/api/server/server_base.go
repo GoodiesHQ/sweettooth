@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/goodieshq/sweettooth/pkg/config"
+	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog/log"
 )
@@ -102,6 +102,6 @@ func (srv *SweetToothServer) Run() error {
 
 	// router should listen on the configured host/port
 	listenStr := fmt.Sprintf("%s:%d", srv.config.Host, srv.config.Port)
-	log.Info().Str("listen", listenStr).Msgf("Starting %s Server", config.APP_NAME)
+	log.Info().Str("listen", listenStr).Msgf("Starting %s Server", info.APP_NAME)
 	return http.ListenAndServe(listenStr, router)
 }
