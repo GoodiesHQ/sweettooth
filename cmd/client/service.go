@@ -6,7 +6,9 @@ import (
 	"github.com/goodieshq/sweettooth/internal/engine"
 	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/config"
+	"github.com/google/uuid"
 	"github.com/kardianos/service"
+	"github.com/rs/zerolog/log"
 )
 
 var ServiceConfig = &service.Config{
@@ -39,4 +41,76 @@ func (p *SweetToothProgram) Start(s service.Service) error {
 func (p *SweetToothProgram) Stop(s service.Service) error {
 	p.engine.Stop()
 	return nil
+}
+
+// start the sweettooth service
+func runStart(svc service.Service) {
+	if err := svc.Start(); err != nil {
+		log.Fatal().Err(err).Msg("failed to start the service")
+	}
+	log.Info().Msg("started the service")
+}
+
+// stop the sweettooth service
+func runStop(svc service.Service) {
+	if err := svc.Stop(); err != nil {
+		log.Fatal().Err(err).Msg("failed to stop the service")
+	}
+	log.Info().Msg("stopped the service")
+}
+
+// get the sweettooth service status
+func runStatus(svc service.Service) {
+	status, err := svc.Status()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to check the service status")
+	}
+	switch status {
+	case service.StatusRunning:
+		log.Info().Str("status", "running").Send()
+	case service.StatusStopped:
+		log.Info().Str("status", "stopped").Send()
+	case service.StatusUnknown:
+		log.Info().Str("status", "unknown").Send()
+	}
+}
+
+// install the sweettooth service
+func runInstall(svc service.Service, eng *engine.SweetToothEngine, token string, notoken bool) {
+	if token == "" {
+		if !notoken {
+			log.Fatal().Msg("a registration token should be provided. to ignore, use \"-notoken\"")
+		}
+		// -notoken provided, you better know what you're doing!
+	} else {
+		tok, err := uuid.Parse(token)
+		if err != nil {
+			log.Fatal().Err(err).Msg("invalid registration token provided")
+		}
+
+		if !eng.Register(tok) {
+			log.Fatal().Msg("failed to register with the server")
+		}
+
+		if err := svc.Install(); err != nil {
+			log.Fatal().Err(err).Msg("failed to install the service")
+		}
+		log.Info().Msg("installed service")
+		if err := svc.Start(); err != nil {
+			log.Fatal().Err(err).Msg("failed to start the service")
+		}
+		log.Info().Msg("started the service")
+	}
+}
+
+func runUninstall(svc service.Service) {
+	if err := svc.Stop(); err != nil {
+		log.Fatal().Err(err).Msg("failed to stop the service")
+	}
+	log.Info().Msg("stopped the service")
+
+	if err := svc.Uninstall(); err != nil {
+		log.Fatal().Err(err).Msg("failed to uninstall the service")
+	}
+	log.Info().Msg("uninstalled the service")
 }

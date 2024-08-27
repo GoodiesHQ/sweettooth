@@ -15,7 +15,6 @@ func (engine *SweetToothEngine) WaitCheck() bool {
 	log.Trace().Str("routine", "WaitCheck").Msg("called")
 	defer log.Trace().Str("routine", "WaitCheck").Msg("finished")
 
-running:
 	for engine.isRunning() {
 		if err := engine.client.Check(); err == nil {
 			return true
@@ -28,7 +27,7 @@ running:
 		case <-time.After(DEFAULT_PERIOD_WAITCHECK):
 			continue
 		case <-engine.GetStopChan():
-			break running
+			panic(ErrStop)
 		}
 	}
 

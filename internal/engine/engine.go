@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/goodieshq/sweettooth/pkg/api/client"
+	"github.com/goodieshq/sweettooth/pkg/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -13,6 +14,7 @@ var ErrStop = errors.New("engine has been stopped")
 
 type SweetToothEngine struct {
 	client       *client.SweetToothClient
+	config       *config.Configuration
 	bootstrapped bool
 	running      atomic.Bool
 	mu           sync.Mutex
@@ -20,24 +22,25 @@ type SweetToothEngine struct {
 	wg           sync.WaitGroup
 }
 
-func NewSweetToothEngine(client *client.SweetToothClient) *SweetToothEngine {
+// create a new engine from a configuration file
+func NewSweetToothEngine(cfg *config.Configuration) *SweetToothEngine {
 	return &SweetToothEngine{
-		client: client,
-		mu:     sync.Mutex{},
-		stopch: nil,
-		wg:     sync.WaitGroup{},
+		client:  client.NewSweetToothClient(cfg.Server.Url),
+		config:  cfg,
+		mu:      sync.Mutex{},
+		stopch:  nil,
+		running: atomic.Bool{},
+		wg:      sync.WaitGroup{},
 	}
 }
 
+// wait for all goroutines to complete (for stop to be called)
 func (engine *SweetToothEngine) Wait() {
 	log := log.Logger.With().Str("routine", "enigne.Wait").Logger()
-	log.Trace().Msg("called")
-	defer log.Trace().Msg("finished")
-
 	if ch := engine.GetStopChan(); ch != nil {
-		log.Trace().Msg("waiting...")
+		log.Trace().Msg("engine is waiting...")
 		<-ch
-		log.Trace().Msg("done waiting")
+		log.Trace().Msg("engine is done waiting")
 	}
 }
 
@@ -45,23 +48,27 @@ func (engine *SweetToothEngine) Start() {
 	engine.mu.Lock()
 	defer engine.mu.Unlock()
 
-	log := log.Logger.With().Str("routine", "enigne.Start").Logger()
+	log := log.With().Str("routine", "enigne.Start").Logger()
 	log.Trace().Msg("called")
 	defer log.Trace().Msg("finished")
 
+	// check if the engine is running, don't bother if it is
 	if engine.isRunning() {
 		log.Trace().Msg("engine is already running")
 		return
 	}
 
+	// create a new signal channel and add a worker
 	engine.stopch = make(chan bool, 1)
 	engine.wg.Add(1)
 
+	// launch the goroutine which performs the actual work
 	go func() {
-		log.Trace().Msg("goroutine executing engine.Run()")
+		log := log.With().Str("subroutine", "enigne.Start()::run").Logger()
+		log.Trace().Msg("goroutine executing")
 		defer engine.wg.Done()
 		engine.run()
-		log.Trace().Msg("goroutine finished engine.Run()")
+		log.Trace().Msg("goroutine finished")
 	}()
 
 	// officially running

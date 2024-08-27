@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/goodieshq/sweettooth/internal/util"
-	"github.com/goodieshq/sweettooth/pkg/api/client"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,20 +17,28 @@ const (
 
 func (engine *SweetToothEngine) run() {
 	// just keep checking in forever every checkin period regardless of what the result is, updates last_seen in the database
-	log.Info().Msg("RUN CALLED")
-	go backgroundCheckin(engine.client)
+	go engine.backgroundCheckin()
 
 	// enter the logic loop
 	engine.loop()
 }
 
-func backgroundCheckin(cli *client.SweetToothClient) {
-	for {
+func (engine *SweetToothEngine) backgroundCheckin() {
+	stopch := engine.GetStopChan()
+
+	// perpetually checkin-in every so often regardless of anything else just to provides a heartbeat
+	for engine.isRunning() {
 		func() {
 			defer util.Recoverable(true) // let this function re-run if it panics
-			err := cli.Check()
+			err := engine.client.Check()
 			log.Trace().Err(err).Msg("background check in") // only output on Trace level or it will fill up log files
 		}()
-		time.Sleep(DEFAULT_PERIOD_CHECKIN)
+		select {
+		case <-stopch:
+			log.Trace().Msg("background checkin stopped")
+			return
+		case <-time.After(DEFAULT_PERIOD_CHECKIN):
+			continue
+		}
 	}
 }
