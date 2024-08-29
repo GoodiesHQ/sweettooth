@@ -40,13 +40,13 @@ func Recoverable(silent bool) {
 			var evt = log.Error()
 			switch r := r.(type) {
 			case error:
-				evt = evt.AnErr("recovered", r)
+				evt = evt.Err(r)
 			case string:
-				evt = evt.AnErr("recovered", errors.New(r))
+				evt = evt.Err(errors.New(r))
 			default:
-				evt = evt.Any("recovered", r)
+				evt = evt.Any("recovered", r).Err(errors.New("unknown error"))
 			}
-			evt.Stack().Msg("client panicked")
+			evt.Stack().Msg("panicked")
 		}
 	}
 }
