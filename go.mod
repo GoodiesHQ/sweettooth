@@ -1,6 +1,6 @@
 module github.com/goodieshq/sweettooth
 
-go 1.23.0
+go 1.23
 
 require (
 	github.com/billgraziano/dpapi v0.5.0
