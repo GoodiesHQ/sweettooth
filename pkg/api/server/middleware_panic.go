@@ -25,7 +25,7 @@ func MiddlewarePanic(next http.Handler) http.Handler {
 					err = fmt.Errorf("unknown panic: %v", val)
 				}
 				// ... log the panic value as an error and return a 500
-				log.Warn().Err(err).Msg("PANIC")
+				log.Warn().Err(err).Msg("panic recovered")
 				ErrServerError(w, r, err)
 			}
 		}()

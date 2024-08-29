@@ -54,27 +54,23 @@ func (srv *SweetToothServer) Run() error {
 	mwgBase := MiddlewareGroup{}
 	mwgBase.Add(MiddlewareLogger) // simple request and error logging
 	mwgBase.Add(MiddlewarePanic)  // recover from and log panics (technically if a panic occurs in the logger it could still crash)
-	mwgBase.Add(MiddlewareJSON)   // all responses should be JSON
 
 	// middleware for all node interaction endpoints
 	mwgNode := MiddlewareGroup{}
 	mwgNode.Add(mwgBase.Apply)          // include all middleware from the base group
+	mwgNode.Add(MiddlewareJSON)         // all responses should be JSON
 	mwgNode.Add(srv.MiddlewareNodeAuth) // add the Node authentication middleware
 
 	// middleware for all web administration endpoints
 	mwgWeb := MiddlewareGroup{}
 	mwgWeb.Add(mwgBase.Apply) // include all middleware from the base group
 
-	// basic index page, TODO: host static application
+	// basic index page, TODO: host static application or use HTMX... undecided
 	router.Handle("GET /", mwgBase.Apply(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		JsonErr(w, r, http.StatusNotImplemented, errors.New("this endpoint is not implemented"))
 		// return
 		// JsonResponse(w, r, http.StatusServiceUnavailable, map[string]interface{}{"status": "success", "a": 123})
 	})))
-
-	/*
-	 * implement endpoint handlers
-	 */
 
 	// temporary, just here to let me clear the cache during development
 	router.Handle("DELETE /api/v1/cache", mwgBase.ApplyFunc(srv.handleDeleteCache)) // temporary function to easily clear the cache

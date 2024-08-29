@@ -6,6 +6,8 @@ import (
 
 	"github.com/goodieshq/sweettooth/internal/crypto"
 	"github.com/goodieshq/sweettooth/internal/util"
+	"github.com/goodieshq/sweettooth/pkg/api"
+	"github.com/rs/zerolog/log"
 )
 
 // Extract the bearer token from the Authorization header
@@ -22,6 +24,30 @@ func extractAuthToken(r *http.Request) string {
 	}
 
 	return parts[1]
+}
+
+func nodeAuthErr(w http.ResponseWriter, r *http.Request, err error, node *api.Node) bool {
+	if err == nil {
+		return false
+	}
+
+	if err != nil {
+		ErrServiceUnavailable(w, r, err)
+		return true
+	}
+
+	if node == nil {
+		ErrNodeNotFound(w, r, nil)
+		return true
+	}
+
+	if !node.Approved {
+		ErrNodeNotApproved(w, r, nil)
+		return true
+	}
+
+	ErrServerError(w, r, err)
+	return true
 }
 
 // Middleware for handling endpoints which are exclusively used by nodes running sweettooth clients
@@ -48,18 +74,8 @@ func (srv *SweetToothServer) MiddlewareNodeAuth(next http.Handler) http.Handler 
 		_, found := srv.cacheValidNodeIDs.Get(nodeidString)
 		if !found {
 			node, err := srv.core.GetNode(r.Context(), nodeid)
-			if err != nil {
-				ErrServiceUnavailable(w, r, err)
-				return
-			}
-
-			if node == nil {
-				ErrNodeNotFound(w, r, nil)
-				return
-			}
-
-			if !node.Approved {
-				ErrNodeNotApproved(w, r, nil)
+			if nodeAuthErr(w, r, err, node) {
+				log.Error().Err(err).Msg("node auth error")
 				return
 			}
 		}
@@ -73,4 +89,12 @@ func (srv *SweetToothServer) MiddlewareNodeAuth(next http.Handler) http.Handler 
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (srv *SweetToothServer) MiddlewareWebAuth(token string) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// tokenString := extractAuthToken(r)
+		})
+	}
 }

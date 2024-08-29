@@ -8,8 +8,11 @@ import (
 )
 
 // the default messages are always sent as a response, but custom errors will show up in the logs instead
-func CreateErr(status int, defaultMessage string) func(http.ResponseWriter, *http.Request, error) {
+func CreateJsonErr(status int, defaultMessage string) func(http.ResponseWriter, *http.Request, error) {
+	// create an error with the default message
 	defaultErr := errors.New(defaultMessage)
+
+	// the default handler will log the error your provide, but send a default error to the end user
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		if err == nil {
 			err = defaultErr
@@ -19,15 +22,15 @@ func CreateErr(status int, defaultMessage string) func(http.ResponseWriter, *htt
 	}
 }
 
-var ErrRegistrationTokenInvalid = CreateErr(http.StatusUnauthorized, "the registration token is not found or expired")
-var ErrNodeTokenInvalid = CreateErr(http.StatusUnauthorized, "the token is invalid or exired")
-var ErrNodeUnauthorized = CreateErr(http.StatusUnauthorized, "the token is not authorized")
-var ErrNodeNotApproved = CreateErr(http.StatusForbidden, "the node is not approved")
-var ErrNodeNotFound = CreateErr(http.StatusNotFound, "the node ID is not found")
-var ErrOrgNotFound = CreateErr(http.StatusNotFound, "the organization is not found")
-var ErrInvalidRequestBody = CreateErr(http.StatusBadRequest, "invalid request payload")
-var ErrServiceUnavailable = CreateErr(http.StatusServiceUnavailable, "service unavailable")
-var ErrServerError = CreateErr(http.StatusInternalServerError, "internal server error")
-var ErrInvalidJobID = CreateErr(http.StatusUnprocessableEntity, "the job ID provided is invalid")
-var ErrJobMissingOrExpired = CreateErr(http.StatusNotFound, "this job ID is missing, expired, deleted, or has reached the attempt limit.")
-var ErrJobAlreadyCompleted = CreateErr(http.StatusConflict, "this job ID has already been completed")
+var ErrRegistrationTokenInvalid = CreateJsonErr(http.StatusUnauthorized, "the registration token is not found or is expired")
+var ErrNodeTokenInvalid = CreateJsonErr(http.StatusUnauthorized, "the token is invalid or exired")
+var ErrNodeUnauthorized = CreateJsonErr(http.StatusUnauthorized, "the token is not authorized")
+var ErrNodeNotApproved = CreateJsonErr(http.StatusForbidden, "the node is not approved")
+var ErrNodeNotFound = CreateJsonErr(http.StatusNotFound, "the node ID is not found")
+var ErrOrgNotFound = CreateJsonErr(http.StatusNotFound, "the organization is not found")
+var ErrInvalidRequestBody = CreateJsonErr(http.StatusBadRequest, "invalid request payload")
+var ErrServiceUnavailable = CreateJsonErr(http.StatusServiceUnavailable, "service unavailable")
+var ErrServerError = CreateJsonErr(http.StatusInternalServerError, "internal server error")
+var ErrInvalidJobID = CreateJsonErr(http.StatusUnprocessableEntity, "the job ID provided is invalid")
+var ErrJobMissingOrExpired = CreateJsonErr(http.StatusNotFound, "this job ID is missing, expired, deleted, or has reached the attempt limit.")
+var ErrJobAlreadyCompleted = CreateJsonErr(http.StatusConflict, "this job ID has already been completed")
