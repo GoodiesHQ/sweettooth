@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -33,6 +34,12 @@ func IsFile(path string) bool {
 	}
 }
 
+// locks a mutex and returns a function to unlock it
+func Locker(mu *sync.Mutex) func() {
+	mu.Lock()
+	return mu.Unlock
+}
+
 // defer this to make any function recoverable and log the error
 func Recoverable(silent bool) {
 	if r := recover(); r != nil {
@@ -51,6 +58,7 @@ func Recoverable(silent bool) {
 	}
 }
 
+// Copy a file from a source to a destination
 func CopyFile(src, dst string) error {
 	// Open the source file
 	srcFile, err := os.Open(src)

@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/goodieshq/sweettooth/internal/server/core_pgx"
 	"github.com/goodieshq/sweettooth/pkg/api/server"
 	"github.com/rs/zerolog/log"
 )
 
-func openDB() (server.SweetToothServerConfig, *server.CorePGX) {
+func openDB() (server.SweetToothServerConfig, *core_pgx.CorePGX) {
 
 	pgHost := os.Getenv("POSTGRES_HOST")
 	if pgHost == "" {
@@ -55,7 +56,7 @@ func openDB() (server.SweetToothServerConfig, *server.CorePGX) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	core, err := server.NewCorePGX(ctx, pgConnStr)
+	core, err := core_pgx.NewCorePGX(ctx, pgConnStr)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize the database connection")
 	}

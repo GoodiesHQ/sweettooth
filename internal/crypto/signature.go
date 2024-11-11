@@ -20,21 +20,6 @@ const CLAIM_PUBKEY = "pubkey"
 
 type TokenGenerator func() string
 
-// Create a JWT signed by the node's own key
-func CreateNodeJWT() (string, error) {
-	now := time.Now().UTC()
-	token := jwt.NewWithClaims(&jwt.SigningMethodEd25519{}, jwt.MapClaims{
-		"iss":        GetPublicKeyID().String(),                                        // issuer is the current node
-		"sub":        GetPublicKeyID().String(),                                        // subject is the current node
-		"aud":        info.APP_NAME,                                                    // audience should be the app server
-		"iat":        now.Unix(),                                                       // issued just now
-		"nbf":        now.Add(-TOKEN_DRIFT_TOLERANCE).Unix(),                           // allow some clock drift tolerance, up to you how much
-		"exp":        now.Add(TOKEN_VALIDITY_PERIOD).Add(TOKEN_DRIFT_TOLERANCE).Unix(), // add expiration time plus the clock drift tolerance
-		CLAIM_PUBKEY: GetPublicKeyBase64(),                                             // public key should be included in each request and checked against the iss/sub
-	})
-	return token.SignedString(getSecretKey())
-}
-
 // extract the target claim from the token's claims and cast to type T
 func extractClaim[T any](claims jwt.MapClaims, name string) (T, error) {
 	var zero T
@@ -52,6 +37,44 @@ func extractClaim[T any](claims jwt.MapClaims, name string) (T, error) {
 	}
 
 	return val, nil
+}
+
+func keyFunc(claims jwt.MapClaims, pubkey ed25519.PublicKey, nodeid uuid.UUID) jwt.Keyfunc {
+	return func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		// extract all necessary claims
+
+		sub, err := extractClaim[string](claims, "sub")
+		if err != nil {
+			return nil, err
+		}
+
+		iss, err := extractClaim[string](claims, "iss")
+		if err != nil {
+			return nil, err
+		}
+
+		aud, err := extractClaim[string](claims, "aud")
+		if err != nil {
+			return nil, err
+		}
+
+		// for node tokens, the iss and sub should both be the UUID
+		if sub != iss || aud != info.APP_NAME {
+			return nil, errors.New("unexpected sub/iss/aud values")
+		}
+
+		// and that UUID should be the fingerprint derived from pubkey
+		if nodeid.String() != sub {
+			return nil, errors.New("fingerprint mismatch")
+		}
+
+		// we've extracted the public key from the token, now we can verify it
+		return pubkey, nil
+	}
 }
 
 // given a bearer token from an authorization header, verify that it is unexpired, validly formed, and internally consistent
@@ -86,41 +109,7 @@ func VerifyNodeJWT(tokenString string) (nodeid uuid.UUID, pubkey ed25519.PublicK
 	nodeid = Fingerprint(pubkey)
 
 	// re-parse the token
-	token, err = jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-
-		// extract all necessary claims
-
-		sub, err := extractClaim[string](claims, "sub")
-		if err != nil {
-			return nil, err
-		}
-
-		iss, err := extractClaim[string](claims, "iss")
-		if err != nil {
-			return nil, err
-		}
-
-		aud, err := extractClaim[string](claims, "aud")
-		if err != nil {
-			return nil, err
-		}
-
-		// for node tokens, the iss and sub should both be the UUID
-		if sub != iss || aud != info.APP_NAME {
-			return nil, errors.New("unexpected sub/iss/aud values")
-		}
-
-		// and that UUID should be the fingerprint derived from pubkey
-		if nodeid.String() != sub {
-			return nil, errors.New("fingerprint mismatch")
-		}
-
-		// we've extracted the public key from the token, now we can verify it
-		return pubkey, nil
-	})
+	token, err = jwt.ParseWithClaims(tokenString, claims, keyFunc(claims, pubkey, nodeid))
 
 	// ensure token was parsed and is valid
 	if err != nil || !token.Valid {

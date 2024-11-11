@@ -4,7 +4,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/goodieshq/sweettooth/internal/util"
+	"github.com/goodieshq/sweettooth/internal/sharedutil"
 	"github.com/goodieshq/sweettooth/pkg/api/server"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -30,17 +30,16 @@ func loop() {
 	defer core.Close()
 
 	srv.Run()
-
 }
 
 func loopRecoverable() {
-	defer util.Recoverable(false)
+	defer sharedutil.Recoverable(false)
 	loop() // main server application loop
 }
 
 func main() {
 	for {
 		loopRecoverable()
-		util.Countdown("restarting server in", 5, "s...")
+		sharedutil.Countdown("restarting server in", 5, "s...")
 	}
 }

@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"strings"
+	"time"
 
-	"github.com/goodieshq/sweettooth/internal/engine"
-	"github.com/goodieshq/sweettooth/internal/util"
+	"github.com/goodieshq/sweettooth/internal/client/engine"
 	"github.com/goodieshq/sweettooth/pkg/config"
 	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/google/uuid"
@@ -14,7 +15,7 @@ import (
 
 var ServiceConfig = &service.Config{
 	Name:        strings.ToLower(info.APP_NAME),
-	DisplayName: info.APP_NAME + " v" + util.VERSION,
+	DisplayName: info.APP_NAME + " v" + info.APP_VERSION,
 	Description: "Centrally managed application by " +
 		"Datalink Networks to manage and monitor 3rd party software at scale.",
 	Executable: config.BinFile(),
@@ -89,7 +90,10 @@ func runInstall(svc service.Service, eng *engine.SweetToothEngine, token string,
 			log.Fatal().Err(err).Msg("invalid registration token provided")
 		}
 
-		if !eng.Register(tok) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+		defer cancel()
+
+		if !eng.Register(ctx, tok) {
 			log.Fatal().Msg("failed to register with the server")
 		}
 
@@ -98,10 +102,12 @@ func runInstall(svc service.Service, eng *engine.SweetToothEngine, token string,
 		}
 		log.Info().Msg("installed service")
 		if err := svc.Start(); err != nil {
-			log.Fatal().Err(err).Msg("failed to start the service")
+			log.Error().Err(err).Msg("failed to start the service")
+		} else {
+			log.Info().Msg("started the service")
 		}
-		log.Info().Msg("started the service")
 	}
+
 	if !nopath {
 		addPath() // add the sweettooth directory to the %PATH%
 	}

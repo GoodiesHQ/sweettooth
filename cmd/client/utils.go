@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goodieshq/sweettooth/internal/system"
+	"github.com/goodieshq/sweettooth/internal/client/system"
 	"github.com/goodieshq/sweettooth/pkg/config"
 	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/rs/zerolog/log"

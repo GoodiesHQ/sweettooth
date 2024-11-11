@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/goodieshq/sweettooth/internal/client/keys"
 	"github.com/goodieshq/sweettooth/internal/crypto"
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/rs/zerolog/log"
@@ -51,7 +52,7 @@ func (cli *SweetToothClient) doRequest(params *requestParams) (*http.Response, e
 	// set the authorization header if the request is authorized
 	if params.authorized {
 		// create a new JWT signed by the node's private key
-		sig, err := crypto.CreateNodeJWT()
+		sig, err := keys.CreateNodeJWT()
 		if err != nil {
 			log.Panic().Err(err).Send() // should never happen
 		}
@@ -118,5 +119,5 @@ func (cli *SweetToothClient) handleResponse(res *http.Response, optional StatusM
 }
 
 func (cli *SweetToothClient) NodeID() string {
-	return crypto.Fingerprint(crypto.GetPublicKey()).String()
+	return crypto.Fingerprint(keys.GetPublicKey()).String()
 }
