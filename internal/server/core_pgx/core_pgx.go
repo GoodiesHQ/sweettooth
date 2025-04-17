@@ -46,6 +46,24 @@ func (core *CorePGX) GetOrganization(ctx context.Context, orgid uuid.UUID) (*api
 	return pgxOrgToCoreOrg(&org), nil
 }
 
+func (core *CorePGX) GetOrganizations(ctx context.Context) ([]*api.Organization, error) {
+	orgs, err := core.q.GetOrganizations(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return pgxOrgsToCoreOrgsPtr(orgs), nil
+}
+
+func (core *CorePGX) GetOrganizationSummaries(ctx context.Context) ([]*api.OrganizationSummary, error) {
+	orgs, err := core.q.GetOrganizationSummaries(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return pgxOrgSummariesToCoreOrgSummariesPtr(orgs), nil
+}
+
 func (core *CorePGX) ProcessRegistrationToken(ctx context.Context, token uuid.UUID) (*uuid.UUID, error) {
 	orgid, err := core.q.GetValidRegistrationToken(ctx, token)
 	if err != nil {

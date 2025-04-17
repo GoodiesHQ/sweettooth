@@ -3,7 +3,7 @@ package engine
 import (
 	"time"
 
-	"github.com/goodieshq/sweettooth/internal/sharedutil"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,7 +29,7 @@ func (engine *SweetToothEngine) backgroundCheckin() {
 	// perpetually checkin-in every so often regardless of anything else just to provides a heartbeat
 	for engine.isRunning() {
 		func() {
-			defer sharedutil.Recoverable(true) // let this function re-run if it panics
+			defer util.Recoverable(true) // let this function re-run if it panics
 			err := engine.client.Check()
 			log.Trace().Err(err).Msg("background check in") // only output on Trace level or it will fill up log files
 		}()

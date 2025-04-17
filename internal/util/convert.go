@@ -16,3 +16,7 @@ func Base64toPubKey(pubkeyBase64 string) (ed25519.PublicKey, error) {
 	}
 	return ed25519.PublicKey(bytes), nil
 }
+
+func Ptr[T any](val T) *T {
+	return &val
+}

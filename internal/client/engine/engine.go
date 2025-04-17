@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
 	"github.com/goodieshq/sweettooth/pkg/config"
 	"github.com/rs/zerolog/log"
@@ -26,24 +27,45 @@ type SweetToothEngine struct {
 
 // create a new engine from a configuration file
 func NewSweetToothEngine(cfg *config.Configuration) *SweetToothEngine {
-	return &SweetToothEngine{
-		client:  client.NewSweetToothClient(cfg.Server.Url),
-		config:  cfg,
+	engine := &SweetToothEngine{
+		// client:  client.NewSweetToothClient(cfg.Server.Url),
+		// config:  cfg,
 		mu:      sync.Mutex{},
 		stopch:  nil,
 		running: atomic.Bool{},
 		wg:      sync.WaitGroup{},
 	}
+	if cfg != nil {
+		engine.LoadConfig(cfg)
+	}
+	return engine
 }
 
-func (engine *SweetToothEngine) commandContext(name string, dur time.Duration) (context.Context, func()) {
+func (engine *SweetToothEngine) LoadConfig(cfg *config.Configuration) {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+
+	log := util.Logger("engine.LoadConfig")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
+
+	if cfg == nil {
+		log.Error().Msg("configuration is nil")
+		return
+	}
+
+	engine.client = client.NewSweetToothClient(cfg.Server.Url)
+	engine.config = cfg
+}
+
+func (engine *SweetToothEngine) commandContext(name string, timeout time.Duration) (context.Context, func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer cancel()
 		select {
 		case <-engine.GetStopChan():
 			log.Warn().Str("name", name).Msg("a stop was received during a command, may require some cleanup!")
-		case <-time.After(dur):
+		case <-time.After(timeout):
 			log.Warn().Str("name", name).Msg("command timed out, canceling the context")
 		case <-ctx.Done():
 		}
@@ -54,6 +76,10 @@ func (engine *SweetToothEngine) commandContext(name string, dur time.Duration) (
 // wait for all goroutines to complete (for stop to be called)
 func (engine *SweetToothEngine) Wait() {
 	log := log.Logger.With().Str("routine", "engine.Wait").Logger()
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
+
+	// wait for the stop channel
 	if ch := engine.GetStopChan(); ch != nil {
 		log.Trace().Msg("engine is waiting...")
 		<-ch
@@ -65,9 +91,9 @@ func (engine *SweetToothEngine) Start() {
 	engine.mu.Lock()
 	defer engine.mu.Unlock()
 
-	log := log.With().Str("routine", "engine.Start").Logger()
+	log := util.Logger("engine.Start")
 	log.Trace().Msg("called")
-	defer log.Trace().Msg("finished")
+	defer log.Trace().Msg("finish")
 
 	// check if the engine is running, don't bother if it is
 	if engine.isRunning() {
@@ -81,16 +107,16 @@ func (engine *SweetToothEngine) Start() {
 
 	// launch the goroutine which performs the actual work
 	go func() {
-		log := log.With().Str("subroutine", "engine.Start()::run").Logger()
-		log.Trace().Msg("goroutine executing")
-		defer log.Trace().Msg("goroutine finished")
+		log := util.Logger("engine.Start()::run")
+		log.Trace().Msg("goroutine called")
+		defer log.Trace().Msg("goroutine finish")
 
 		defer engine.wg.Done()
+
+		// officially running
+		engine.running.Store(true)
 		engine.run()
 	}()
-
-	// officially running
-	engine.running.Store(true)
 }
 
 // return a read-only stop channel and a cleanup function
@@ -103,15 +129,19 @@ func (engine *SweetToothEngine) isRunning() bool {
 }
 
 func (engine *SweetToothEngine) Stop() {
-	log.Warn().Msg("engine.stop called")
 	engine.mu.Lock()
 	defer engine.mu.Unlock()
+
+	log := util.Logger("engine.Stop")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	if !engine.running.CompareAndSwap(true, false) {
 		log.Warn().Msg("engine was already stopped")
 		return
 	}
 
+	// deploy a recovery func, if something goes wrong, the engine will not be confirmed to be shut down
 	defer func() {
 		if r := recover(); r != nil {
 			engine.running.Store(true)

@@ -16,6 +16,39 @@ func pgxOrgToCoreOrg(dborg *database.Organization) *api.Organization {
 	return &org
 }
 
+func pgxOrgsToCoreOrgs(dborgs []database.Organization) []api.Organization {
+	apiorgs := make([]api.Organization, len(dborgs))
+	for i, org := range dborgs {
+		apiorgs[i] = api.Organization{ID: org.ID, Name: org.Name}
+	}
+	return apiorgs
+}
+
+func pgxOrgsToCoreOrgsPtr(dborgs []database.Organization) []*api.Organization {
+	apiorgs := make([]*api.Organization, len(dborgs))
+	for i, org := range dborgs {
+		apiorgs[i] = &api.Organization{
+			ID: org.ID,
+			Name: org.Name,
+		}
+	}
+	return apiorgs
+}
+
+func pgxOrgSummariesToCoreOrgSummariesPtr(dborgsums []database.GetOrganizationSummariesRow) []*api.OrganizationSummary {
+	apiorgsums := make([]*api.OrganizationSummary, len(dborgsums))
+	for i, orgsum := range dborgsums {
+		apiorgsums[i] = &api.OrganizationSummary{
+			Organization: api.Organization{
+				ID: orgsum.ID,
+				Name: orgsum.Name,
+			},
+			NodeCount: int(orgsum.NodeCount),
+		}
+	}
+	return apiorgsums
+}
+
 // convert a pgx package job to api package job
 func pgxPackageJobToCorePackageJob(dbjob *database.PackageJob) *api.PackageJob {
 	var job api.PackageJob

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/goodieshq/sweettooth/internal/client/tracker"
-	"github.com/rs/zerolog/log"
+	"github.com/goodieshq/sweettooth/internal/util"
 )
 
 const (
@@ -13,8 +13,9 @@ const (
 
 // client routine which invokes the software tracker and reports changes to the server
 func (engine *SweetToothEngine) Tracker() {
-	log.Trace().Str("routine", "Tracker").Msg("called")
-	defer log.Trace().Str("routine", "Tracker").Msg("finished")
+	log := util.Logger("engine.Tracker")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	log.Trace().Msg("doTracker called")
 

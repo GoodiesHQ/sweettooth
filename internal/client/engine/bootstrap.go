@@ -47,7 +47,7 @@ func (engine *SweetToothEngine) Bootstrap() {
 		Str("public_key", keys.GetPublicKeyBase64()).
 		Msgf("Initialized " + info.APP_NAME + " Client")
 
-	// once initialized, the node ID should be permanent
+	// once initialized, the node ID should be permanent on all log entries
 	AddLogKey("nodeid", engine.client.NodeID())
 
 	engine.bootstrapped = true

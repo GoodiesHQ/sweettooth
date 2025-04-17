@@ -21,10 +21,14 @@ var (
 )
 
 // create the base directory to store configs and cache
-func Bootstrap(override bool) error {
+func Bootstrap(force bool) error {
+	log := util.Logger("config::Bootstrap")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
+
 	var err error
-	for _, p := range []string{dirBase(), dirLogs(), dirKeys(), dirBin()} {
-		err = os.MkdirAll(p, 0600) // create all necessary directories
+	for _, directory := range []string{dirBase(), dirLogs(), dirKeys(), dirBin()} {
+		err = os.MkdirAll(directory, 0600) // create all necessary directories
 		if err != nil {
 			return err
 		}
@@ -61,7 +65,7 @@ func Bootstrap(override bool) error {
 	}
 
 	// if it doesn't, or if -override is supplied, copy the file anyways
-	if override || !binExists {
+	if force || !binExists {
 		err := util.CopyFile(exePath, binPath)
 		if err != nil {
 			return err

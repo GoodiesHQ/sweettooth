@@ -14,6 +14,8 @@ const (
 	LIMIT_ATTEMPTS_MAX   = 100 // set a maximum limit of 100 attempts
 )
 
+type ContextKey string
+
 // get the query parameter of attempts max
 func RequestQueryAttemptsMax(r *http.Request) int {
 	var attemptsMax int = 0
@@ -43,6 +45,7 @@ func RequestQueryAttemptsMax(r *http.Request) int {
 	return attemptsMax
 }
 
+// request node ID
 func Rid(r *http.Request) *uuid.UUID {
 	return r.Context().Value("nodeid").(*uuid.UUID)
 }
@@ -51,7 +54,7 @@ func SetRequestContext(r *http.Request, ctx context.Context) {
 	*r = *r.WithContext(ctx)
 }
 
-func SetRequestContextValue(r *http.Request, key string, value interface{}) {
+func SetRequestContextValue(r *http.Request, key ContextKey, value interface{}) {
 	SetRequestContext(r, context.WithValue(r.Context(), key, value))
 }
 

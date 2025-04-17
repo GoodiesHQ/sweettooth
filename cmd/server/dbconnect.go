@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/goodieshq/sweettooth/internal/server"
+	"github.com/goodieshq/sweettooth/internal/server/core"
 	"github.com/goodieshq/sweettooth/internal/server/core_pgx"
-	"github.com/goodieshq/sweettooth/pkg/api/server"
 	"github.com/rs/zerolog/log"
 )
 
-func openDB() (server.SweetToothServerConfig, *core_pgx.CorePGX) {
-
+func getConfig() *server.SweetToothServerConfig {
 	pgHost := os.Getenv("POSTGRES_HOST")
 	if pgHost == "" {
 		pgHost = "localhost"
@@ -53,14 +53,18 @@ func openDB() (server.SweetToothServerConfig, *core_pgx.CorePGX) {
 		log.Fatal().Err(errors.New("missing server secret")).Send()
 	}
 
+	return &server.SweetToothServerConfig{
+		Secret:    secret,
+		DBConnStr: pgConnStr,
+	}
+}
+
+func connectDb(cfg *server.SweetToothServerConfig) core.Core {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-
-	core, err := core_pgx.NewCorePGX(ctx, pgConnStr)
+	core, err := core_pgx.NewCorePGX(ctx, cfg.DBConnStr)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize the database connection")
 	}
-	return server.SweetToothServerConfig{
-		Secret: secret,
-	}, core
+	return core
 }

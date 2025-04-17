@@ -2,7 +2,6 @@ package util
 
 import (
 	"regexp"
-	"sync"
 )
 
 // Simple software application definition
@@ -37,12 +36,4 @@ type Repository struct {
 	BypassProxy bool   `json:"bypass_proxy"`
 	SelfService bool   `json:"self_service"`
 	AdminOnly   bool   `json:"admin_only"`
-}
-
-type LogRWMutex struct {
-	mu sync.RWMutex
-}
-
-func (lmu *LogRWMutex) foo() {
-	lmu.mu.Lock()
 }

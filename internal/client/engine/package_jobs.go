@@ -6,7 +6,6 @@ import (
 	"github.com/goodieshq/sweettooth/internal/client/choco"
 	"github.com/goodieshq/sweettooth/internal/client/schedule"
 	"github.com/goodieshq/sweettooth/internal/util"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -14,8 +13,9 @@ const (
 )
 
 func (engine *SweetToothEngine) PackageJobs() error {
-	log.Trace().Str("routine", "PackageJobs").Msg("called")
-	defer log.Trace().Str("routine", "PackageJobs").Msg("finished")
+	log := util.Logger("engine.PackageJobs")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	joblist, err := engine.client.GetPackageJobs()
 	if err != nil {

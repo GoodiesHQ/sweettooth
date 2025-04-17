@@ -3,8 +3,8 @@ package engine
 import (
 	"time"
 
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -12,8 +12,9 @@ const (
 )
 
 func (engine *SweetToothEngine) WaitCheck() bool {
-	log.Trace().Str("routine", "WaitCheck").Msg("called")
-	defer log.Trace().Str("routine", "WaitCheck").Msg("finished")
+	log := util.Logger("engine.WaitCheck")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	for engine.isRunning() {
 		if err := engine.client.Check(); err == nil {

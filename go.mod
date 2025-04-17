@@ -3,9 +3,9 @@ module github.com/goodieshq/sweettooth
 go 1.23
 
 require (
-	github.com/a-h/templ v0.2.793
 	github.com/billgraziano/dpapi v0.5.0
 	github.com/creativeprojects/go-selfupdate v1.4.0
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.1
@@ -24,10 +24,12 @@ require (
 	code.gitea.io/sdk/gitea v0.19.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
+	github.com/a-h/templ v0.2.793 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-github/v30 v30.1.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect

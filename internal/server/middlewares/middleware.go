@@ -4,12 +4,6 @@ import (
 	"net/http"
 )
 
-var all = []Middleware{
-	MiddlewareJSON(),
-	MiddlewareLogger(),
-	MiddlewarePanic(),
-}
-
 type Middleware func(next http.Handler) http.Handler
 type MiddlewareGroup []Middleware
 

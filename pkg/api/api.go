@@ -55,6 +55,11 @@ type Organization struct {
 	Name string    `json:"name"` // org name (unique, case-insensitive)
 }
 
+type OrganizationSummary struct {
+	Organization
+	NodeCount int `json:"node_count"` // number of nodes in this org
+}
+
 type Node struct {
 	ID              uuid.UUID  `json:"id"`               // node's ID (determined by public key)
 	OrganizationID  *uuid.UUID `json:"organization_id"`  // node's org ID

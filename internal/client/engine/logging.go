@@ -20,7 +20,8 @@ func LoggingBasic() {
 	log.Logger = log.Output(logTerm).With().Timestamp().Logger()
 }
 
-func setLogLevel(logger zerolog.Logger, levelName string) zerolog.Logger {
+// takes a logger and a log level name and returns a logger with that level
+func SetLogLevel(logger zerolog.Logger, levelName string) zerolog.Logger {
 	level, err := zerolog.ParseLevel(levelName)
 	if levelName == "" || err != nil || level == zerolog.NoLevel {
 		log.Warn().Msgf("config log level '%s' is invalid, using default '%s'", levelName, config.DEFAULT_LOGLEVEL)
@@ -36,14 +37,14 @@ func AddLogKey(key string, val string) {
 func LoggingFile(filename string, level string) {
 	logFile := &lumberjack.Logger{
 		Filename:  filename, // target the logfile in the config module
-		MaxSize:   25,       // 50 MB log file limit until rollover
-		MaxAge:    365,      // store log file backups for 1 full year
+		MaxSize:   25,       // 25 MB log file limit until rollover
+		MaxAge:    180,      // store log file backups for 180 days
 		LocalTime: true,     // use local time instead of UTC for backup naming
 		Compress:  true,     // use gzip compression for the backup files
 	}
 
 	// combine an stdout terminal writer and the log file
-	log.Logger = setLogLevel(log.Output(
+	log.Logger = SetLogLevel(log.Output(
 		zerolog.MultiLevelWriter(
 			zerolog.ConsoleWriter{
 				Out:        os.Stdout,

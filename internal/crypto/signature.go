@@ -108,7 +108,7 @@ func VerifyNodeJWT(tokenString string) (nodeid uuid.UUID, pubkey ed25519.PublicK
 	pubkey = ed25519.PublicKey(pubkeyBytes)
 	nodeid = Fingerprint(pubkey)
 
-	// re-parse the token
+	// re-parse the token now that we know the expected public key
 	token, err = jwt.ParseWithClaims(tokenString, claims, keyFunc(claims, pubkey, nodeid))
 
 	// ensure token was parsed and is valid

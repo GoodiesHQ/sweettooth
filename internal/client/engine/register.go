@@ -7,11 +7,11 @@ import (
 	"github.com/goodieshq/sweettooth/internal/client/keys"
 	"github.com/goodieshq/sweettooth/internal/client/system"
 	"github.com/goodieshq/sweettooth/internal/client/tracker"
+	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/goodieshq/sweettooth/pkg/api/client"
 	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
 // client routine to ensure the node is registered with the server
@@ -19,8 +19,9 @@ func (engine *SweetToothEngine) Register(ctx context.Context, token uuid.UUID) b
 	engine.mu.Lock()
 	defer engine.mu.Unlock()
 
-	log.Trace().Str("routine", "Register").Msg("called")
-	defer log.Trace().Str("routine", "Register").Msg("finished")
+	log := util.Logger("engine.Register")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	// perform an initial check for the current status and determine if a registration is required
 	if !engine.client.Registered {
@@ -98,7 +99,6 @@ func (engine *SweetToothEngine) Register(ctx context.Context, token uuid.UUID) b
 		default:
 			log.Panic().Int("status_code", code).Str("status", http.StatusText(code)).Err(err).Msg("unexpected status code")
 		}
-
 		engine.client.Registered = true
 	}
 

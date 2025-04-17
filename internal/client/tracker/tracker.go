@@ -8,7 +8,6 @@ import (
 	"github.com/goodieshq/sweettooth/internal/client/choco"
 	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
-	"github.com/rs/zerolog/log"
 )
 
 var mu sync.Mutex
@@ -34,7 +33,9 @@ func SetPackages(packagesNew api.Packages) {
 }
 
 func Track(ctx context.Context) (*api.Packages, bool, error) {
-	log.Trace().Msg("tracker.Track called")
+	log := util.Logger("tracker::Track")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	defer util.Locker(&mu)()
 

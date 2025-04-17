@@ -7,6 +7,21 @@ WHERE
     id=$1;
 
 
+-- name: GetOrganizations :many
+SELECT
+    *
+FROM
+    organizations
+ORDER BY name ASC;
+
+-- name: GetOrganizationSummaries :many
+SELECT
+  o.*,
+  COUNT(n.id) AS node_count
+FROM organizations o
+LEFT JOIN nodes n ON n.organization_id = o.id
+GROUP BY o.id ORDER BY o.name ASC;
+
 -- name: GetValidRegistrationToken :one
 SELECT
     organization_id

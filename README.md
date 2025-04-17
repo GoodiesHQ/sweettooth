@@ -16,7 +16,7 @@ It runs as a service and will perpetually perform the following logic loop:
 3) If the current iteration of the loop is inside the maintenance window, perform the Chocolatey package jobs (**install**, **upgrade**, or **uninstall**)
 4) Inventory the system for software managed and unmanaged by Chocolatey. Report all changes in installed software and detected outdated software.
 
-SweetTooth is designed to be a self-contained executable to make ease of distribution and whitelistic simple. It has built-in functionality to install itself into `C:\ProgramData\SweetTooth` and create the necessary files, to create the service, and to uninstall the service. These are the commands you can pass to SweetTooth:
+SweetTooth is designed to be a self-contained executable to make ease of distribution and whitelisting simple. It has built-in functionality to install itself into `C:\ProgramData\SweetTooth` and create the necessary files, to create the service, and to uninstall the service. These are the commands you can pass to SweetTooth:
 
 ```
 sweettooth [requires flags] install

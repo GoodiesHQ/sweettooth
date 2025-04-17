@@ -3,7 +3,6 @@ package engine
 import (
 	"github.com/goodieshq/sweettooth/internal/client/schedule"
 	"github.com/goodieshq/sweettooth/internal/util"
-	"github.com/rs/zerolog/log"
 )
 
 // client routine which acquires the node's assigned maintenance windows
@@ -11,8 +10,9 @@ func (engine *SweetToothEngine) Schedule() {
 	engine.mu.Lock()
 	defer engine.mu.Unlock()
 
-	log.Trace().Str("routine", "Schedule").Msg("called")
-	defer log.Trace().Str("routine", "Schedule").Msg("finished")
+	log := util.Logger("engine.Schedule")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
 
 	engine.mustRun()
 

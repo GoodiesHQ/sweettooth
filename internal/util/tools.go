@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -87,4 +88,8 @@ func CopyFile(src, dst string) error {
 	}
 
 	return nil
+}
+
+func NoCache() string {
+	return "?nocache=" + strconv.FormatInt(time.Now().UnixMilli(), 10)
 }

@@ -22,7 +22,7 @@ func (engine *SweetToothEngine) loopOnce() bool {
 	engine.Bootstrap()
 
 	// register the client if it is not already registered, otherwise silently continue
-	// engine.Register()
+	// engine.Register(context.Background(), uuid.MustParse(""))
 
 	// wait for the first successful check in (wait for an admin to approve the public key if necessary)
 	engine.WaitCheck()

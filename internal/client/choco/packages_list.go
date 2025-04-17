@@ -41,7 +41,10 @@ func getListAllInstalledPart(part string) (util.SoftwareList, partType) {
 }
 
 func ListAllInstalled(ctx context.Context) (util.SoftwareList, util.SoftwareList, error) {
-	log.Trace().Msg("choco.ListAllInstalled called")
+	log := util.Logger("choco::ListAllInstalled")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
+
 	log.Debug().Str("cmd", "choco list --include-programs").Msg("listing all installed programs")
 
 	cmd := exec.CommandContext(ctx, "choco", "list", "--include-programs")
@@ -91,7 +94,10 @@ func ListAllInstalled(ctx context.Context) (util.SoftwareList, util.SoftwareList
 }
 
 func ListChocoOutdated(ctx context.Context) (util.SoftwareOutdatedList, error) {
-	log.Trace().Msg("choco.ListChocoOutdated called")
+	log := util.Logger("choco::ListChocoOutdated")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
+
 	log.Debug().Str("cmd", "choco outdated -r").Msg("listing outdated choco packages")
 
 	cmd := exec.CommandContext(ctx, "choco", "outdated", "-r")
@@ -141,7 +147,10 @@ func ListChocoOutdated(ctx context.Context) (util.SoftwareOutdatedList, error) {
 }
 
 func ListChocoInstalled(ctx context.Context) ([]util.Software, error) {
-	log.Trace().Msg("choco.ListChocoInstalled called")
+	log := util.Logger("choco::ListChocoInstalled")
+	log.Trace().Msg("called")
+	defer log.Trace().Msg("finish")
+
 	log.Debug().Str("cmd", "choco list -r").Msg("listing installed choco packages")
 
 	cmd := exec.CommandContext(ctx, "choco", "list", "-r")
