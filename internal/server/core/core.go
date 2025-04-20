@@ -11,12 +11,13 @@ type Core interface {
 	Close()
 	ErrNotFound(err error) bool                                                        // determines if the err is the equivalent of no SQL rows being found
 	Seen(ctx context.Context, nodeid uuid.UUID) error                                  // update last seen attribute of a node
-	GetOrganizations(ctx context.Context) ([]*api.Organization, error)                 // get a list of all organizations
+	GetOrganizations(ctx context.Context, ) ([]*api.Organization, error)                 // get a list of all organizations
 	GetOrganizationSummaries(ctx context.Context) ([]*api.OrganizationSummary, error)  // get a list of all organizations
 	GetOrganization(ctx context.Context, orgid uuid.UUID) (*api.Organization, error)   // get an organization by ID
 	ProcessRegistrationToken(ctx context.Context, token uuid.UUID) (*uuid.UUID, error) // get the organization from a registration token
 
 	// nodes
+	GetNodes(ctx context.Context, orgid uuid.UUID) ([]*api.Node, error)
 	GetNode(ctx context.Context, nodeid uuid.UUID) (*api.Node, error)
 	CreateNode(ctx context.Context, req api.RegistrationRequest) (*api.Node, error)
 	// nodes.approval

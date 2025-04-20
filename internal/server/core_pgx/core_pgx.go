@@ -109,6 +109,23 @@ func (core *CorePGX) GetNodePackages(ctx context.Context, nodeid uuid.UUID) (*ap
 	return &packages, nil
 }
 
+func (core *CorePGX) GetNodes(ctx context.Context, orgid uuid.UUID) ([]*api.Node, error){
+	nodes, err := core.q.GetNodesByOrgID(ctx, database.GetNodesByOrgIDParams{
+
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*api.Node{}, nil
+		}
+	}
+
+	nodesApi := make([]*api.Node, len(nodes))
+	for i, node := range nodes {
+		nodesApi[i] = pgxNodeToCoreNode(&node)
+	}
+	return nodesApi, nil
+}
+
 func (core *CorePGX) GetNode(ctx context.Context, nodeid uuid.UUID) (*api.Node, error) {
 	node, err := core.q.GetNodeByID(ctx, nodeid)
 	if err != nil {
