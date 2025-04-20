@@ -1,10 +1,8 @@
 -- name: GetNodeByID :one
-SELECT
-    * -- get the full node by ID, try and keep this to a minimum as there can be a lot of data per node
-FROM
-    nodes
-WHERE
-    id=$1;
+SELECT * FROM nodes WHERE id=$1 LIMIT 1;
+
+-- name: GetNodesByOrgID :many
+SELECT * FROM nodes WHERE organization_id=$1 LIMIT $2 OFFSET $3;
 
 -- name: CreateNode :one
 INSERT INTO

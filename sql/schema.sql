@@ -9,12 +9,40 @@ CREATE TYPE schedule_entry AS (
     time_end SMALLINT
 );
 
+-- Users are administrators of the nodes
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- random UUID
+  email CITEXT NOT NULL, -- case-insensitive email address
+  password TEXT NOT NULL, -- hashed password
+  mfatoken TEXT DEFAULT NULL, -- MFA secret token
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- when the user was created
+  last_login TIMESTAMP DEFAULT NULL, -- when the user last logged in
+  UNIQUE(email) -- all email addresses must be unique
+);
+
 -- Each node will be categorized into organizations and 0 or more groups within each organization
 CREATE TABLE IF NOT EXISTS organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- random UUID 
   name CITEXT NOT NULL, -- case-insensitive name of the organization
   UNIQUE(name) -- all organization names must be unique
 );
+
+-- Each user can be assigned to organizations with various roles
+CREATE TABLE IF NOT EXISTS user_organization_assignments (
+  user_id UUID NOT NULL REFERENCES users(id), -- the user ID to add to the organization
+  organization_id UUID NOT NULL REFERENCES organizations(id), -- the organization ID the user is joining
+  role SMALLINT NOT NULL DEFAULT 0, -- the role of the user in the organization
+  PRIMARY KEY (user_id, organization_id) -- each user can only be in an organization once
+);
+
+/*
+  Roles:
+    0 - Reader    = Can view nodes and jobs
+    1 - Approver  = Reader + approve nodes
+    2 - Operator  = Approver + run jobs
+    3 - Manager   = Operator + set schedules, manage groups
+    4 - Admin     = Manager + manage users
+*/
 
 -- Registration keys for an organization
 CREATE TABLE IF NOT EXISTS registration_tokens (
