@@ -54,7 +54,7 @@ func getConfig() *server.SweetToothServerConfig {
 	}
 
 	return &server.SweetToothServerConfig{
-		Secret:    secret,
+		Secret:    []byte(secret),
 		DBConnStr: pgConnStr,
 	}
 }
