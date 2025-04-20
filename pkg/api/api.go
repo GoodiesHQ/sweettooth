@@ -39,9 +39,9 @@ type CheckResponse struct {
 }
 
 type ErrorResponse struct {
-	Message    string `json:"message"` // error message
-	Status     string `json:"status"`  // error status
-	StatusCode int    ``               // error status code
+	Message    string `json:"message"`               // error message
+	Status     string `json:"status"`                // error status
+	StatusCode int    `json:"status_code,omitempty"` // error status code
 }
 
 func (err ErrorResponse) Error() string {
