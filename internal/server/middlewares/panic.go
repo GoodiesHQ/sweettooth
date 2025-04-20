@@ -28,6 +28,7 @@ func MiddlewarePanic(next http.Handler) http.Handler {
 				// ... log the panic value as an error and return a 500
 				log.Warn().Err(err).Msg("panic recovered")
 				responses.ErrServerError(w, r, err)
+				return
 			}
 		}()
 		next.ServeHTTP(w, r)

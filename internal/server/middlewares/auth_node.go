@@ -2,13 +2,12 @@ package middlewares
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/goodieshq/sweettooth/internal/crypto"
 	"github.com/goodieshq/sweettooth/internal/server/cache"
 	"github.com/goodieshq/sweettooth/internal/server/core"
+	"github.com/goodieshq/sweettooth/internal/server/requests"
 	"github.com/goodieshq/sweettooth/internal/server/responses"
-	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/rs/zerolog/log"
 )
@@ -18,7 +17,7 @@ func MiddlewareAuthNode(core core.Core, cache cache.Cache) func(http.Handler) ht
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.Trace().Msg("starting middleware node auth")
 			// extract the bearer token from the Authorization header
-			tokenString := extractBearerToken(r)
+			tokenString := ExtractBearerToken(r)
 			if tokenString == "" {
 				responses.ErrNodeTokenInvalid(w, r, nil)
 				return
@@ -33,16 +32,16 @@ func MiddlewareAuthNode(core core.Core, cache cache.Cache) func(http.Handler) ht
 				return
 			}
 
-			// set the node ID (may be returned even upon error)
+			// set the node ID for the request via the state
 			nodeidString := nodeid.String()
-			util.SetRequestNodeID(r, nodeid)
-			log.Trace().Str("nodeid", nodeidString).Msg("node id added to the request")
+			requests.SetNodeID(r, nodeid)
+			log.Trace().Str("nodeid", nodeidString).Msg("node ID added to the request")
 
 			// At this point, all we know is that the signature is valid and well-formed. Check cache/db for node validity
-			found, authorized := cache.GetAuth(nodeidString)
+			found, authorized := cache.GetNodeAuth(nodeidString)
 			if !found {
 				// node ID was not found in the cache, check the database
-				log.Warn().Str("nodeid", nodeidString).Msg("node ID cache miss, checking database")
+				log.Debug().Str("nodeid", nodeidString).Msg("node ID auth cache miss, checking database")
 				node, err := core.GetNode(r.Context(), nodeid)
 
 				if err != nil {
@@ -57,7 +56,7 @@ func MiddlewareAuthNode(core core.Core, cache cache.Cache) func(http.Handler) ht
 				}
 
 				// at this point, we know fprint validity. Put it in the cache.
-				cache.SetAuth(nodeidString, authorized)
+				cache.SetNodeAuth(nodeidString, authorized)
 			}
 
 			if !authorized {
@@ -71,22 +70,6 @@ func MiddlewareAuthNode(core core.Core, cache cache.Cache) func(http.Handler) ht
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// Extract the bearer token from the Authorization header
-func extractBearerToken(r *http.Request) string {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return ""
-	}
-
-	// all valid tokens will be in the form of "Bearer <token>"
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || parts[0] != "Bearer" {
-		return ""
-	}
-
-	return parts[1]
 }
 
 // sends an API error if there is an error to send, returns true if there was an error

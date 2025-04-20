@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/goodieshq/sweettooth/internal/server/requests"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -24,16 +24,6 @@ func evtFromStatus(status int) *zerolog.Event {
 	}
 }
 
-func logNodeID(r *http.Request, evt **zerolog.Event) {
-	// check if the node ID is in the request context (authorized node request)
-	nodeid := r.Context().Value("nodeid")
-	if nodeid != nil {
-		if nodeid, ok := nodeid.(*uuid.UUID); ok {
-			*evt = (*evt).Str("nodeid", nodeid.String())
-		}
-	}
-}
-
 // simple logging middleware to log requests as they come in
 func MiddlewareLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,24 +38,20 @@ func MiddlewareLogger(next http.Handler) http.Handler {
 		// add basic request information like the method and path
 		evt = evt.Str("method", r.Method).Str("path", r.URL.Path)
 
-		logNodeID(r, &evt)
+		if state := requests.State(r); state != nil && state.IsNodeRequest() {
+			evt = evt.Str("nodeid", state.NodeID.String())
+		}
 
 		// add the latency in MS
 		evt = evt.Int64("latency_ms", t2.Sub(t1).Milliseconds())
 
 		// add the response status
-		//if rw.statusCode != 0 {
 		evt = evt.Int("status_code", rw.statusCode).Str("status", http.StatusText(rw.statusCode))
-		//}
 
 		// check if there is an error
-		err := r.Context().Value("error")
+		err := requests.Err(r)
 		if err != nil {
-			if errParsed, ok := err.(error); ok {
-				evt = evt.AnErr("error_parsed", errParsed)
-			} else {
-				evt = evt.Any("error", err)
-			}
+			evt = evt.Err(err)
 		}
 
 		evt.Send()
