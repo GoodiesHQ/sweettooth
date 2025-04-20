@@ -142,3 +142,18 @@ type Source struct {
 	Name           string    `db:"name" json:"name"`
 	Entries        []byte    `db:"entries" json:"entries"`
 }
+
+type User struct {
+	ID        uuid.UUID        `db:"id" json:"id"`
+	Email     string           `db:"email" json:"email"`
+	Password  string           `db:"password" json:"password"`
+	Mfatoken  pgtype.Text      `db:"mfatoken" json:"mfatoken"`
+	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
+	LastLogin pgtype.Timestamp `db:"last_login" json:"last_login"`
+}
+
+type UserOrganizationAssignment struct {
+	UserID         uuid.UUID `db:"user_id" json:"user_id"`
+	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
+	Role           int16     `db:"role" json:"role"`
+}

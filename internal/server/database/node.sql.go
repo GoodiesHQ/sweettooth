@@ -118,12 +118,7 @@ func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (Node, e
 }
 
 const getNodeByID = `-- name: GetNodeByID :one
-SELECT
-    id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, packages_choco, packages_system, packages_outdated, packages_updated_at, connected_on, approved_on, last_seen, approved -- get the full node by ID, try and keep this to a minimum as there can be a lot of data per node
-FROM
-    nodes
-WHERE
-    id=$1
+SELECT id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, packages_choco, packages_system, packages_outdated, packages_updated_at, connected_on, approved_on, last_seen, approved FROM nodes WHERE id=$1 LIMIT 1
 `
 
 func (q *Queries) GetNodeByID(ctx context.Context, id uuid.UUID) (Node, error) {
@@ -170,6 +165,58 @@ func (q *Queries) GetNodePackages(ctx context.Context, id uuid.UUID) (GetNodePac
 	var i GetNodePackagesRow
 	err := row.Scan(&i.PackagesChoco, &i.PackagesSystem, &i.PackagesOutdated)
 	return i, err
+}
+
+const getNodesByOrgID = `-- name: GetNodesByOrgID :many
+SELECT id, organization_id, public_key, label, hostname, client_version, pending_sources, pending_schedule, os_kernel, os_name, os_major, os_minor, os_build, packages_choco, packages_system, packages_outdated, packages_updated_at, connected_on, approved_on, last_seen, approved FROM nodes WHERE organization_id=$1 LIMIT $2 OFFSET $3
+`
+
+type GetNodesByOrgIDParams struct {
+	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
+	Limit          int32     `db:"limit" json:"limit"`
+	Offset         int32     `db:"offset" json:"offset"`
+}
+
+func (q *Queries) GetNodesByOrgID(ctx context.Context, arg GetNodesByOrgIDParams) ([]Node, error) {
+	rows, err := q.db.Query(ctx, getNodesByOrgID, arg.OrganizationID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Node
+	for rows.Next() {
+		var i Node
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.PublicKey,
+			&i.Label,
+			&i.Hostname,
+			&i.ClientVersion,
+			&i.PendingSources,
+			&i.PendingSchedule,
+			&i.OsKernel,
+			&i.OsName,
+			&i.OsMajor,
+			&i.OsMinor,
+			&i.OsBuild,
+			&i.PackagesChoco,
+			&i.PackagesSystem,
+			&i.PackagesOutdated,
+			&i.PackagesUpdatedAt,
+			&i.ConnectedOn,
+			&i.ApprovedOn,
+			&i.LastSeen,
+			&i.Approved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setNodeApproval = `-- name: SetNodeApproval :exec
