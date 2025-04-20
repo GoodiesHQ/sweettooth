@@ -43,12 +43,12 @@ func (c *CacheRedis) SetAuthWithLifetime(nodeid string, authorized bool, lifetim
 }
 
 // Set the authorization status of a node (cache-only) using the default expiration time
-func (c *CacheRedis) SetAuth(nodeid string, authorized bool) {
+func (c *CacheRedis) SetNodeAuth(nodeid string, authorized bool) {
 	c.SetAuthWithLifetime(nodeid, authorized, c.lifetime)
 }
 
 // Get the auth status of a Node ID (only reliable if `found` is true, meaning it was found in the cache and the value can be trusted)
-func (c *CacheRedis) GetAuth(nodeid string) (found, authorized bool) {
+func (c *CacheRedis) GetNodeAuth(nodeid string) (found, authorized bool) {
 	isAuthorized, err := c.c.Get(context.Background(), CacheSuffixAuth(nodeid)).Result()
 	if err == redis.Nil {
 		return false, false

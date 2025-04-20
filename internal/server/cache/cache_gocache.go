@@ -22,12 +22,12 @@ func (c *CacheGo) SetAuthWithLifetime(nodeid string, authorized bool, lifetime t
 }
 
 // Set the authorization status of a node (cache-only) using the default expiration time
-func (c *CacheGo) SetAuth(nodeid string, authorized bool) {
+func (c *CacheGo) SetNodeAuth(nodeid string, authorized bool) {
 	c.SetAuthWithLifetime(nodeid, authorized, 0)
 }
 
 // Get the auth status of a Node ID (only reliable if `found` is true, meaning it was found in the cache and the value can be trusted)
-func (c *CacheGo) GetAuth(nodeid string) (found, authorized bool) {
+func (c *CacheGo) GetNodeAuth(nodeid string) (found, authorized bool) {
 	isAuthorized, found := c.c.Get(CacheSuffixAuth(nodeid))
 	if found {
 		authorized = isAuthorized.(bool)
