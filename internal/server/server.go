@@ -11,6 +11,7 @@ import (
 	"github.com/goodieshq/sweettooth/internal/server/cache"
 	"github.com/goodieshq/sweettooth/internal/server/core"
 	"github.com/goodieshq/sweettooth/internal/server/middlewares"
+	"github.com/goodieshq/sweettooth/internal/server/roles"
 	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/rs/zerolog/log"
 )
@@ -27,7 +28,7 @@ type SweetToothServerConfig struct {
 	DBConnStr string        // DB connection string
 	Host      string        // local address to listen on (default :: or 0.0.0.0)
 	Port      uint16        // local port to listen on (default 7777)
-	Secret    string        // used for JWT HMAC creation/validation for web interactions
+	Secret    []byte        // used for JWT HMAC creation/validation for web interactions
 }
 
 type SweetToothServer struct {
@@ -60,7 +61,7 @@ func NewSweetToothServer(config *SweetToothServerConfig, core core.Core) (*Sweet
 			port = DEFAULT_REDIS_PORT
 		}
 
-		c = cache.NewCacheRedis(config.RedisHost, port, config.RedisPass, config.CacheTime)
+		c = cache.NewCacheRedis(config.RedisHost, port, config.RedisPass, cacheTime)
 	} else {
 		c = cache.NewCacheGo(cacheTime, 1*time.Minute)
 	}
@@ -72,14 +73,14 @@ func NewSweetToothServer(config *SweetToothServerConfig, core core.Core) (*Sweet
 	}, nil
 }
 
+// Apply all Node related API endpoints to the router
 func (srv *SweetToothServer) ApiNodeHandlers(routerNode chi.Router) {
-	// create the handler for all node-related API endpoints
 	handlerNode := apinode.NewApiNodeHandler(srv.cache, srv.core)
 
 	// Unauthorized endpoints do not require JWT tokens to be passed, e.g. for registering a new node
 	routerNode.Group(func(routerNodeUnauthorized chi.Router) {
-		// register and onboard a new node, unauthenticated but valid signature required
-		routerNodeUnauthorized.Post("/api/v1/node/register", handlerNode.HandlePostNodeRegister)
+		// register a new node
+		routerNodeUnauthorized.Post("/register", handlerNode.HandlePostNodeRegister)
 	})
 
 	// Authorized endpoints require a valid JWT token from a registered node
@@ -89,55 +90,72 @@ func (srv *SweetToothServer) ApiNodeHandlers(routerNode chi.Router) {
 			middlewares.MiddlewareAuthNode(srv.core, srv.cache),
 		)
 		// the simplest API endpoint: returns 204 on success. Use it to verify JWT auth.
-		routerNodeAuthorized.Get("/api/v1/node/check", handlerNode.HandleGetNodeCheck)
+		routerNodeAuthorized.Get("/check", handlerNode.HandleGetNodeCheck)
 		// node should acquire a single array of all schedule entries that apply to it (assigned to node, group, etc...)
-		routerNodeAuthorized.Get("/api/v1/node/schedule", handlerNode.HandleGetNodeSchedule) // acquire the combined schedule entries for this node
+		routerNodeAuthorized.Get("/schedule", handlerNode.HandleGetNodeSchedule) // acquire the combined schedule entries for this node
 		// node can query or update the server's inventory of its packages
-		routerNodeAuthorized.Get("/api/v1/node/packages", handlerNode.HandleGetNodePackages)
-		routerNodeAuthorized.Put("/api/v1/node/packages", handlerNode.HandlePutNodePackages)
+		routerNodeAuthorized.Get("/packages", handlerNode.HandleGetNodePackages)
+		routerNodeAuthorized.Put("/packages", handlerNode.HandlePutNodePackages)
 		// list package jobs
-		routerNodeAuthorized.Get("/api/v1/node/packages/jobs", handlerNode.HandleGetNodePackagesJobs)
-		routerNodeAuthorized.Get("/api/v1/node/packages/jobs/", handlerNode.HandleGetNodePackagesJobs)
+		routerNodeAuthorized.Get("/packages/jobs", handlerNode.HandleGetNodePackagesJobs)
+		routerNodeAuthorized.Get("/packages/jobs/", handlerNode.HandleGetNodePackagesJobs)
 		// get details of a specific job (counts as an attempt as the details should only be acquired when ready to )
-		routerNodeAuthorized.Get("/api/v1/node/packages/jobs/{id}", handlerNode.HandleGetNodePackagesJob)
-		routerNodeAuthorized.Post("/api/v1/node/packages/jobs/{id}", handlerNode.HandlePostNodePackagesJob)
+		routerNodeAuthorized.Get("/packages/jobs/{id}", handlerNode.HandleGetNodePackagesJob)
+		routerNodeAuthorized.Post("/packages/jobs/{id}", handlerNode.HandlePostNodePackagesJob)
 	})
 }
 
 func (srv *SweetToothServer) ApiWebHandlers(routerWeb chi.Router) {
 	handlerWeb := apiweb.NewApiNodeHandler(srv.cache, srv.core)
 	routerWeb.Group(func(routerWebUnauthorized chi.Router) {
-		routerWebUnauthorized.Post("/api/v1/web/login", handlerWeb.HandlePostWebLogin)
+		routerWebUnauthorized.Post("/login", handlerWeb.HandlePostWebLogin(srv.config.Secret))
 	})
 
 	routerWeb.Group(func(routerWebAuthorized chi.Router) {
 		routerWebAuthorized.Use(
-			// TODO: add authentication middleware
+			middlewares.MiddlewareAuthWeb(srv.core, srv.cache, srv.config.Secret),
+			middlewares.MiddlewarePaginate,
 		)
 
 		// GET /api/v1/web/organizations
-		routerWebAuthorized.Get("/api/v1/web/organizations", handlerWeb.HandleGetWebOrganizations)
-		// GET /api/v1/web/organizations/summaries
-		routerWebAuthorized.Get("/api/v1/web/organizations/summaries", handlerWeb.HandleGetWebOrganizationSummaries)
-		// GET /api/v1/web/organizations/{orgid}
-		routerWebAuthorized.Get("/api/v1/web/organizations/{orgid}", handlerWeb.HandleGetWebOrganization)
+		routerWebAuthorized.Get("/organizations", handlerWeb.HandleGetWebOrganizations)
+		routerWebAuthorized.Get("/organizations_summary", handlerWeb.HandleGetWebOrganizationSummaries)
+
+		routerWebAuthorized.Route("/organizations/{orgid}", func(routerOrg chi.Router) {
+			routerOrg.Use(
+				// Every request context will have an org ID extracted from the URL
+				middlewares.MiddlewareOrganization,
+			)
+
+			// GET /api/v1/web/organizations/{orgid}
+			routerOrg.Get(
+				"/",
+				middlewares.OrgRoleMinimum(handlerWeb.HandleGetWebOrganization, roles.READER),
+			)
+
+			// GET /api/v1/web/organizations/{orgid}/nodes
+			routerOrg.Get(
+				"/nodes",
+				middlewares.OrgRoleMinimum(handlerWeb.HandleGetWebOrganizationNodes, roles.READER),
+			)
+		})
 	})
 }
 
 func (srv *SweetToothServer) Run() error {
 	// create the base router
 	router := chi.NewRouter()
+	router.Use(
+		middlewares.MiddlewareState,  // chi middleware to set the request state
+		middlewares.MiddlewareLogger, // chi middleware to log requests
+		middlewares.MiddlewarePanic,  // chi middleware to recover from panics
+		middlewares.MiddlewareJSON,   // chi middleware to handle JSON requests
+	)
 
 	router.Group(func(r chi.Router) {
 		// All API endpoints will use the logger and panic middleware
-		r.Use(
-			middlewares.MiddlewareLogger, // chi middleware to log requests
-			middlewares.MiddlewarePanic,  // chi middleware to recover from panics
-			middlewares.MiddlewareJSON,   // chi middleware to handle JSON requests
-		)
-
-		r.Group(srv.ApiNodeHandlers)
-		r.Group(srv.ApiWebHandlers)
+		r.Route("/api/v1/node", srv.ApiNodeHandlers)
+		r.Route("/api/v1/web", srv.ApiWebHandlers)
 	})
 
 	// serve static files
