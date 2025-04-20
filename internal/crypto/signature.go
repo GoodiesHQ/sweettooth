@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/goodieshq/sweettooth/internal/server/roles"
 	"github.com/goodieshq/sweettooth/pkg/info"
 	"github.com/google/uuid"
 )
@@ -77,6 +78,76 @@ func keyFunc(claims jwt.MapClaims, pubkey ed25519.PublicKey, nodeid uuid.UUID) j
 	}
 }
 
+func RefreshWebJWT(tokenString string, jwtSecret []byte) (tokenRefreshed string, userid uuid.UUID, superAdmin bool, orgRoles roles.OrgRoles, err error) {
+	userid, superAdmin, orgRoles, err = VerifyWebJWT(tokenString, jwtSecret)
+	if err != nil {
+		return
+	}
+
+	tokenRefreshed, err = CreateWebJWT(userid, superAdmin, orgRoles, jwtSecret)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func VerifyWebJWT(tokenString string, jwtSecret []byte) (userid uuid.UUID, superAdmin bool, orgRoles roles.OrgRoles, err error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil {
+		return
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		err = fmt.Errorf("invalid token or claims")
+		return
+	}
+
+	if claims.Issuer != info.APP_NAME {
+		err = fmt.Errorf("invalid issuer: %s", claims.Issuer)
+		return
+	}
+
+	subjectString, err := claims.GetSubject()
+	if err != nil {
+		return
+	}
+
+	userid, err = uuid.Parse(subjectString)
+	if err != nil {
+		return
+	}
+
+	orgRoles = claims.OrgRoles
+	superAdmin = claims.SuperAdmin
+	return
+}
+
+func CreateWebJWT(userid uuid.UUID, superadmin bool, orgRoles roles.OrgRoles, jwtSecret []byte) (string, error) {
+	claims := Claims{
+		OrgRoles: orgRoles,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    info.APP_NAME,
+			Audience:  jwt.ClaimStrings{info.APP_NAME},
+			Subject:   userid.String(),
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			NotBefore: jwt.NewNumericDate(time.Now().UTC().Add(-TOKEN_DRIFT_TOLERANCE)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(TOKEN_VALIDITY_PERIOD).Add(TOKEN_DRIFT_TOLERANCE)),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
 // given a bearer token from an authorization header, verify that it is unexpired, validly formed, and internally consistent
 func VerifyNodeJWT(tokenString string) (nodeid uuid.UUID, pubkey ed25519.PublicKey, err error) {
 	// parse the token assuming ED25519 key signing
@@ -120,4 +191,10 @@ func VerifyNodeJWT(tokenString string) (nodeid uuid.UUID, pubkey ed25519.PublicK
 	}
 	err = nil
 	return
+}
+
+type Claims struct {
+	OrgRoles   roles.OrgRoles `json:"org_roles"`
+	SuperAdmin bool           `json:"superadmin"`
+	jwt.RegisteredClaims
 }
