@@ -3,8 +3,8 @@ package apiweb
 import (
 	"net/http"
 
+	"github.com/goodieshq/sweettooth/internal/server/requests"
 	"github.com/goodieshq/sweettooth/internal/server/responses"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,13 +30,13 @@ func (h *ApiWebHandler) HandleGetWebOrganizationSummaries(w http.ResponseWriter,
 
 // GET /api/v1/web/organizations/{orgid}
 func (h *ApiWebHandler) HandleGetWebOrganization(w http.ResponseWriter, r *http.Request) {
-	orgid, err := uuid.Parse(r.PathValue("orgid"))
-	if err != nil {
-		responses.ErrInvalidOrgID(w, r, err)
+	orgid := requests.Oid(r)
+	if orgid == nil {
+		responses.ErrInvalidOrgID(w, r, nil)
 		return
 	}
 
-	org, err := h.core.GetOrganization(r.Context(), orgid)
+	org, err := h.core.GetOrganization(r.Context(), *orgid)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get organizations")
 		responses.ErrServiceUnavailable(w, r, err)
@@ -44,4 +44,22 @@ func (h *ApiWebHandler) HandleGetWebOrganization(w http.ResponseWriter, r *http.
 	}
 
 	responses.JsonResponse(w, r, http.StatusOK, org)
+}
+
+// GET /api/v1/web/organizations/{orgid}/nodes
+func (h *ApiWebHandler) HandleGetWebOrganizationNodes(w http.ResponseWriter, r *http.Request) {
+	orgid := requests.Oid(r)
+	if orgid == nil {
+		responses.ErrInvalidOrgID(w, r, nil)
+		return
+	}
+
+	nodes, err := h.core.GetNodes(r.Context(), *orgid)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get organizations")
+		responses.ErrServiceUnavailable(w, r, err)
+		return
+	}
+
+	responses.JsonResponse(w, r, http.StatusOK, nodes)
 }

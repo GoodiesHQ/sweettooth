@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	"github.com/goodieshq/sweettooth/internal/crypto"
+	"github.com/goodieshq/sweettooth/internal/server/requests"
 	"github.com/goodieshq/sweettooth/internal/server/responses"
-	"github.com/goodieshq/sweettooth/internal/util"
 	"github.com/goodieshq/sweettooth/pkg/api"
 	"github.com/google/uuid"
 )
@@ -28,7 +28,7 @@ func (h *ApiNodeHandler) HandleGetNodeCheck(w http.ResponseWriter, r *http.Reque
 
 // GET /api/v1/node/schedules
 func (h *ApiNodeHandler) HandleGetNodeSchedule(w http.ResponseWriter, r *http.Request) {
-	sched, err := h.core.GetNodeSchedule(r.Context(), *util.Rid(r))
+	sched, err := h.core.GetNodeSchedule(r.Context(), *requests.NodeNID(r))
 	if err != nil {
 		responses.ErrServerError(w, r, err)
 		return
@@ -61,7 +61,7 @@ func (h *ApiNodeHandler) HandlePostNodeRegister(w http.ResponseWriter, r *http.R
 	}
 
 	fprint := crypto.Fingerprint(pubkeyBytes)
-	util.SetRequestNodeID(r, fprint)
+	r = requests.WithRequestNodeID(r, fprint)
 
 	// check node existince
 	node, err := h.core.GetNode(r.Context(), fprint)
@@ -110,7 +110,7 @@ func (h *ApiNodeHandler) HandlePostNodeRegister(w http.ResponseWriter, r *http.R
 // GET /api/v1/node/packages
 func (h *ApiNodeHandler) HandleGetNodePackages(w http.ResponseWriter, r *http.Request) {
 	// get a list of currently installed packages (choco, system, outdated)
-	pkg, err := h.core.GetNodePackages(r.Context(), *util.Rid(r))
+	pkg, err := h.core.GetNodePackages(r.Context(), *requests.NodeNID(r))
 	if err != nil {
 		responses.ErrServiceUnavailable(w, r, err)
 		return
@@ -137,7 +137,7 @@ func (h *ApiNodeHandler) HandlePutNodePackages(w http.ResponseWriter, r *http.Re
 	}
 
 	// update the node's packages in the database if they are different
-	err = h.core.UpdateNodePackages(r.Context(), *util.Rid(r), &packages)
+	err = h.core.UpdateNodePackages(r.Context(), *requests.NodeNID(r), &packages)
 	if err != nil {
 		responses.ErrServiceUnavailable(w, r, err)
 		return
@@ -150,8 +150,8 @@ func (h *ApiNodeHandler) HandlePutNodePackages(w http.ResponseWriter, r *http.Re
 // GET /api/v1/node/packages/jobs
 func (h *ApiNodeHandler) HandleGetNodePackagesJobs(w http.ResponseWriter, r *http.Request) {
 	// get the node ID from the request's JWT
-	nodeid := *util.Rid(r)
-	attemptsMax := util.RequestQueryAttemptsMax(r)
+	nodeid := *requests.NodeNID(r)
+	attemptsMax := requests.RequestQueryAttemptsMax(r)
 
 	// get job list from the database
 	jobs, err := h.core.GetPackageJobList(r.Context(), nodeid, attemptsMax)
@@ -173,8 +173,8 @@ func (h *ApiNodeHandler) HandleGetNodePackagesJob(w http.ResponseWriter, r *http
 		return
 	}
 
-	nodeid := *util.Rid(r)
-	attemptsMax := util.RequestQueryAttemptsMax(r)
+	nodeid := *requests.NodeNID(r)
+	attemptsMax := requests.RequestQueryAttemptsMax(r)
 
 	// get the job from the database if it exists
 	job, err := h.core.GetPackageJob(r.Context(), jobid)
@@ -224,7 +224,7 @@ func (h *ApiNodeHandler) HandlePostNodePackagesJob(w http.ResponseWriter, r *htt
 		return
 	}
 
-	nodeid := *util.Rid(r)
+	nodeid := *requests.NodeNID(r)
 
 	// get the job from the database if it exists
 	job, err := h.core.GetPackageJob(r.Context(), jobid)
